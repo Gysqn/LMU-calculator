@@ -1,8 +1,8 @@
 import "./style.css";
-import { planRace } from "./calc/plan";
+import { planRace, replanRace } from "./calc/plan";
 import type { Plan } from "./calc/types";
 import { initDrivers } from "./ui/drivers";
-import { raceLengthMinutes, readForm, resetForm, restoreForm, saveForm, setRaceLength, showErrors, syncVisibility } from "./ui/form";
+import { prefillLive, raceLengthMinutes, readForm, resetForm, restoreForm, saveForm, setRaceLength, showErrors, syncVisibility } from "./ui/form";
 import { planText } from "./ui/planText";
 import { renderMessage, renderPlan, stintInfo } from "./ui/render";
 import { initTheme } from "./ui/theme";
@@ -36,16 +36,17 @@ function update(): void {
     jump.textContent = ""; // an empty bar is hidden by the stylesheet
     return;
   }
-  const result = planRace(read.input);
+  const result = read.live ? replanRace(read.input, read.live) : planRace(read.input);
   if (!result.ok) {
     out.innerHTML = renderMessage("This cannot be planned", result.error);
     jump.textContent = "See what is wrong ↓";
     return;
   }
   lastPlan = result;
-  lastText = planText(read.input, result);
-  out.innerHTML = renderPlan(result);
-  jump.textContent = result.totalLaps + " laps · " + result.stops + (result.stops === 1 ? " stop" : " stops") + " · view plan ↓";
+  lastText = planText(read.input, result, read.live);
+  out.innerHTML = renderPlan(result, read.live);
+  const stops = result.stops + (result.stops === 1 ? " stop" : " stops");
+  jump.textContent = read.live ? stops + " to go · view plan ↓" : result.totalLaps + " laps · " + stops + " · view plan ↓";
 }
 
 /** Highlight the preset button that matches the typed race length. */
@@ -120,6 +121,11 @@ initTheme(element("theme"));
 initReset(element<HTMLButtonElement>("reset"));
 
 form.addEventListener("input", update);
+// Switching to "During the race" fills the empty live fields once, so a plan shows straight away.
+element("modeLive").addEventListener("change", () => {
+  prefillLive();
+  update();
+});
 form.addEventListener("submit", (e) => e.preventDefault());
 presets.addEventListener("click", (e) => {
   if (e.target instanceof HTMLButtonElement && e.target.dataset.hours) {

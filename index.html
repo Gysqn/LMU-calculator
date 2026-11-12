@@ -58,6 +58,37 @@
         <h3>Your race</h3>
         <button type="button" class="ghost small" id="reset">Reset</button>
       </div>
+
+      <div class="mode" role="radiogroup" aria-label="When are you planning?">
+        <label><input type="radio" name="mode" id="modePre" checked><span>Before the race</span></label>
+        <label><input type="radio" name="mode" id="modeLive"><span>During the race</span></label>
+      </div>
+
+      <fieldset id="liveBox" class="live" hidden>
+        <legend>Right now</legend>
+        <p class="hint">Fill this in as the car crosses the line. You get a new plan for the rest of the race.</p>
+        <div class="wide three">
+          <label class="f"><span class="lab">Time left</span>
+            <span class="in"><input id="leftH" type="number" min="0" step="1" inputmode="numeric"><span class="unit">h</span></span></label>
+          <label class="f"><span class="lab">&nbsp;</span>
+            <span class="in"><input id="leftM" type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Minutes left"><span class="unit">min</span></span></label>
+          <label class="f"><span class="lab">&nbsp;</span>
+            <span class="in"><input id="leftS" type="number" min="0" max="59" step="1" inputmode="numeric" aria-label="Seconds left"><span class="unit">s</span></span></label>
+        </div>
+        <label class="f"><span class="lab">Laps completed</span>
+          <span class="in"><input id="lapsDone" type="number" min="0" step="1" inputmode="numeric"><span class="unit">laps</span></span></label>
+        <label class="f"><span class="lab">Fuel in the tank</span>
+          <span class="in"><input id="fuelNow" type="number" min="0" step="0.1" inputmode="decimal"><span class="unit">L</span></span></label>
+        <label class="f"><span class="lab">Tyre condition</span>
+          <span class="in"><input id="tyreNow" type="number" min="0" max="100" step="1" inputmode="numeric"><span class="unit">%</span></span></label>
+        <label class="f"><span class="lab">Tyres used so far</span>
+          <span class="in"><input id="tyresUsedNow" type="number" min="4" step="1" inputmode="numeric"><span class="unit">tyres</span></span></label>
+        <label class="f wide"><span class="lab">Driver in the car</span>
+          <span class="in"><select id="driverNow"></select></span></label>
+        <label class="check wide"><input id="boxNow" type="checkbox"> <span>Box at the end of this lap</span></label>
+        <p class="hint">Tick this to see the plan if you come in now, for example under a safety car.</p>
+      </fieldset>
+
       <fieldset>
         <legend>Race</legend>
         <div class="chips wide" id="presets" role="group" aria-label="Race length presets">
@@ -222,7 +253,7 @@
     </details>
     <details>
       <summary>My numbers in the race are different. What now?</summary>
-      <p>Change the inputs and the plan updates straight away. A mode that re-plans from the current lap during the race is planned for a later version.</p>
+      <p>Switch the planner to "During the race". Enter the time left, the laps completed, the fuel in the tank and the tyre condition as the car crosses the line. You get a new plan for the rest of the race. Tick "Box at the end of this lap" to see what happens if you come in now, for example under a safety car.</p>
     </details>
     <details>
       <summary>Is this an official tool?</summary>

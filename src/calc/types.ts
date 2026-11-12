@@ -38,6 +38,23 @@ export interface PlanInput {
   rotateDrivers: boolean;
 }
 
+/** The race as it stands right now, at the moment the car crosses the line to start a new lap. */
+export interface LiveState {
+  /** Time left on the race clock. */
+  timeLeftSeconds: number;
+  lapsDone: number;
+  /** Fuel in the tank now. */
+  fuelLitres: number;
+  /** Tyre condition now, in percent. All tyres are treated the same. */
+  tyreCondition: number;
+  /** Single tyres used so far, counting the four from the start. */
+  tyresUsed: number;
+  /** Position in the driver list of the driver who is in the car. */
+  driverIndex: number;
+  /** true: come in at the end of this lap, for example because of a safety car. */
+  boxThisLap: boolean;
+}
+
 /** How many tyres are changed at a stop. Never one or three. */
 export type TyresChanged = 0 | 2 | 4;
 

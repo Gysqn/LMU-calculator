@@ -1,4 +1,4 @@
-import type { DriverTime, PitStop, PlanError, PlanInput, PlanResult, Stint, TyresChanged } from "./types";
+import type { DriverTime, LiveState, PitStop, PlanError, PlanInput, PlanResult, Stint, TyresChanged } from "./types";
 
 // Computers store decimals imprecisely: 90 / 3.6 can come out as 24.999999999999996.
 // A tiny tolerance stops that from costing (or adding) a whole lap.
@@ -120,10 +120,26 @@ interface Setup {
   swapping: boolean;
   /** Laps on a full tank. */
   tankLaps: number;
-  /** Laps on the fuel the car starts with. */
-  firstFuelLaps: number;
   /** Laps new tyres last above the minimum. */
   tyreLaps: number;
+}
+
+/** Where the simulation begins: the start of the race, or a moment during it. */
+interface Start {
+  /** Race clock, in seconds since the start. */
+  clock: number;
+  lapsDone: number;
+  fuel: number;
+  /** Laps already driven on the tyres that are on the car. */
+  tyreAgeLaps: number;
+  tyresUsed: number;
+  driverIndex: number;
+  /** Laps the fuel in the car allows before the first stop. */
+  firstFuelLaps: number;
+  /** Laps the tyres on the car allow before they go under the minimum. */
+  firstTyreLaps: number;
+  /** true: come in at the end of the current lap, whatever the fuel and tyres allow. */
+  boxThisLap: boolean;
 }
 
 /**
@@ -134,20 +150,21 @@ interface Setup {
 type Schedule = [boolean[], boolean[]] | null;
 
 /** Drive the whole race once, with the given rule for tyre changes. */
-function simulate(c: PlanInput, setup: Setup, schedule: Schedule): PlanResult {
-  const { drivers, swapping, tankLaps, firstFuelLaps, tyreLaps } = setup;
+function simulate(c: PlanInput, setup: Setup, schedule: Schedule, start: Start): PlanResult {
+  const { drivers, swapping, tankLaps, tyreLaps } = setup;
   // With a fixed schedule the tyres may go under the minimum, so only fuel limits a stint.
   const fullStintLaps = schedule ? tankLaps : Math.min(tankLaps, tyreLaps);
 
   const stints: Stint[] = [];
-  let clock = 0;
-  let lapNo = 0;
-  let fuel = c.startFuelLitres;
+  let clock = start.clock;
+  let lapNo = start.lapsDone;
+  let fuel = start.fuel;
   // Laps driven on each of the two tyre pairs.
-  const pairLaps: [number, number] = [0, 0];
-  let tyresUsed = 4;
+  const pairLaps: [number, number] = [start.tyreAgeLaps, start.tyreAgeLaps];
+  let tyresUsed = start.tyresUsed;
   // Laps the car is fuelled and "tyred" for in the coming stint.
-  let plannedLaps = Math.min(firstFuelLaps, fullStintLaps);
+  let plannedLaps = schedule ? start.firstFuelLaps : Math.min(start.firstFuelLaps, start.firstTyreLaps);
+  if (start.boxThisLap) plannedLaps = 1;
 
   for (let i = 0; ; i++) {
     if (i >= MAX_STINTS) return fail("This plan needs more than 2000 stints. Check the inputs.");
@@ -155,7 +172,7 @@ function simulate(c: PlanInput, setup: Setup, schedule: Schedule): PlanResult {
     const needed = lapsToFinish(c.raceSeconds - clock, c.lapSeconds);
     const final = needed <= plannedLaps;
     const laps = final ? needed : plannedLaps;
-    const driverIndex = swapping ? i % drivers.length : 0;
+    const driverIndex = swapping ? (start.driverIndex + i) % drivers.length : start.driverIndex;
 
     const end = clock + laps * c.lapSeconds;
     const fuelAtEnd = fuel - laps * c.fuelPerLap;
@@ -267,18 +284,20 @@ function simulate(c: PlanInput, setup: Setup, schedule: Schedule): PlanResult {
 }
 
 /** Plan with too few tyres to stay above the minimum: spread the changes over the race. */
-function planWithSpreadTyres(c: PlanInput, setup: Setup, maxTyres: number): PlanResult {
-  // Tyres are changed per pair. The four starting tyres are not available for changes.
-  const pairChanges = Math.floor((maxTyres - 4) / 2);
+function planWithSpreadTyres(c: PlanInput, setup: Setup, maxTyres: number, start: Start): PlanResult {
+  // Tyres are changed per pair. Tyres that are already used are not available for changes.
+  const pairChanges = Math.max(0, Math.floor((maxTyres - start.tyresUsed) / 2));
   const forPairA = Math.ceil(pairChanges / 2);
   const forPairB = Math.floor(pairChanges / 2);
 
   // The stops move a little when tyre changes are added or removed, because the pit time changes.
   // So: plan, place the changes on those stints, plan again, and repeat until the stints stay the same.
-  let result = simulate(c, setup, [[], []]);
+  let result = simulate(c, setup, [[], []], start);
   for (let round = 0; round < 6 && result.ok; round++) {
     const stintLaps = result.stints.map((s) => s.laps);
-    const next = simulate(c, setup, [spreadChanges(stintLaps, forPairA), spreadChanges(stintLaps, forPairB)]);
+    // The tyres on the car are not new: count the laps they already did in the first run.
+    const runs = stintLaps.map((laps, i) => (i === 0 ? laps + Math.round(start.tyreAgeLaps) : laps));
+    const next = simulate(c, setup, [spreadChanges(runs, forPairA), spreadChanges(runs, forPairB)], start);
     if (!next.ok) return next;
     const settled = next.stints.length === stintLaps.length && next.stints.every((s, i) => s.laps === stintLaps[i]);
     result = next;
@@ -287,28 +306,25 @@ function planWithSpreadTyres(c: PlanInput, setup: Setup, maxTyres: number): Plan
   return result;
 }
 
-export function planRace(c: PlanInput): PlanResult {
-  const problem = validate(c);
-  if (problem) return fail(problem);
-
+function makeSetup(c: PlanInput): Setup {
   const drivers = c.drivers.length > 0 ? c.drivers : ["Driver 1"];
-  const setup: Setup = {
+  return {
     drivers,
     swapping: c.rotateDrivers && drivers.length > 1,
     tankLaps: fuelStintLaps(c.tankLitres, c.fuelPerLap, c.marginLaps),
-    firstFuelLaps: fuelStintLaps(c.startFuelLitres, c.fuelPerLap, c.marginLaps),
     tyreLaps: tyreStintLaps(c.tyreWearPerLap, c.tyreMinCondition),
   };
+}
+
+/** Pick the tyre strategy and run the simulation from the given starting point. */
+function run(c: PlanInput, setup: Setup, start: Start): PlanResult {
   if (setup.tankLaps < 1) {
     return fail("The tank cannot cover one lap plus the safety margin. Raise the tank size or lower the margin.");
-  }
-  if (setup.firstFuelLaps < 1) {
-    return fail("The fuel at the start cannot cover one lap plus the safety margin.");
   }
 
   // First choice: change tyres whenever they would go under the minimum.
   // New tyres that cannot even do one lap above the minimum make that impossible.
-  const asNeeded = setup.tyreLaps >= 1 ? simulate(c, setup, null) : null;
+  const asNeeded = setup.tyreLaps >= 1 ? simulate(c, setup, null, start) : null;
   if (asNeeded && !asNeeded.ok) return asNeeded;
   if (asNeeded && (c.maxTyres === null || asNeeded.tyresUsed <= c.maxTyres)) return asNeeded;
 
@@ -316,5 +332,74 @@ export function planRace(c: PlanInput): PlanResult {
     return fail("New tyres drop below your minimum within one lap. Lower the wear or the minimum.");
   }
   // Not enough tyres for that. Use the tyres there are as evenly as possible.
-  return planWithSpreadTyres(c, setup, c.maxTyres);
+  return planWithSpreadTyres(c, setup, c.maxTyres, start);
+}
+
+/** Plan the whole race before the start. */
+export function planRace(c: PlanInput): PlanResult {
+  const problem = validate(c);
+  if (problem) return fail(problem);
+
+  const setup = makeSetup(c);
+  const firstFuelLaps = fuelStintLaps(c.startFuelLitres, c.fuelPerLap, c.marginLaps);
+  if (setup.tankLaps >= 1 && firstFuelLaps < 1) {
+    return fail("The fuel at the start cannot cover one lap plus the safety margin.");
+  }
+  return run(c, setup, {
+    clock: 0,
+    lapsDone: 0,
+    fuel: c.startFuelLitres,
+    tyreAgeLaps: 0,
+    tyresUsed: 4,
+    driverIndex: 0,
+    firstFuelLaps,
+    firstTyreLaps: setup.tyreLaps,
+    boxThisLap: false,
+  });
+}
+
+function validateLive(c: PlanInput, live: LiveState): string | null {
+  if (!isNumber(live.timeLeftSeconds) || live.timeLeftSeconds < 0) return "Enter the time left on the race clock.";
+  if (live.timeLeftSeconds > c.raceSeconds + EPS) return "The time left is longer than the race.";
+  if (!Number.isInteger(live.lapsDone) || live.lapsDone < 0) return "Enter the laps completed as a whole number.";
+  if (!isNumber(live.fuelLitres) || live.fuelLitres <= 0) return "Enter the fuel in the tank.";
+  if (live.fuelLitres > c.tankLitres + EPS) return "The fuel in the tank is more than the tank holds.";
+  if (!isNumber(live.tyreCondition) || live.tyreCondition < 0 || live.tyreCondition > 100) {
+    return "The tyre condition must be between 0 and 100 percent.";
+  }
+  if (!Number.isInteger(live.tyresUsed) || live.tyresUsed < 4) return "The tyres used so far must be at least 4.";
+  if (c.maxTyres !== null && live.tyresUsed > c.maxTyres) return "You have already used more tyres than your limit.";
+  return null;
+}
+
+/**
+ * Plan the rest of a race that is already running.
+ * The state is the moment the car crosses the line to start a new lap.
+ */
+export function replanRace(c: PlanInput, live: LiveState): PlanResult {
+  const problem = validate(c) ?? validateLive(c, live);
+  if (problem) return fail(problem);
+
+  const setup = makeSetup(c);
+  // Normally keep the margin. If only a bare lap is left in the tank, drive that lap and come in.
+  let firstFuelLaps = fuelStintLaps(live.fuelLitres, c.fuelPerLap, c.marginLaps);
+  if (firstFuelLaps < 1 && fuelStintLaps(live.fuelLitres, c.fuelPerLap, 0) >= 1) firstFuelLaps = 1;
+  if (firstFuelLaps < 1) return fail("The fuel in the tank cannot cover one more lap. Check the fuel you entered.");
+
+  const wear = c.tyreWearPerLap;
+  // Tyres that are already under the minimum still have to make it to the pits: at least one lap.
+  const firstTyreLaps = wear > 0 ? Math.max(1, floorSafe((live.tyreCondition - c.tyreMinCondition) / wear)) : Infinity;
+  const driverIndex = Math.min(Math.max(0, Math.floor(live.driverIndex)), setup.drivers.length - 1);
+
+  return run(c, setup, {
+    clock: c.raceSeconds - live.timeLeftSeconds,
+    lapsDone: live.lapsDone,
+    fuel: live.fuelLitres,
+    tyreAgeLaps: wear > 0 ? (100 - live.tyreCondition) / wear : 0,
+    tyresUsed: live.tyresUsed,
+    driverIndex,
+    firstFuelLaps,
+    firstTyreLaps,
+    boxThisLap: live.boxThisLap,
+  });
 }

@@ -1,5 +1,5 @@
 import { formatHm, formatHms, formatMs } from "../calc/time";
-import type { Plan, Stint } from "../calc/types";
+import type { LiveState, Plan, Stint } from "../calc/types";
 
 // Turns a plan into HTML. Everything the user typed goes through esc() first.
 
@@ -22,12 +22,12 @@ function tile(key: string, value: string | number, sub: string): string {
   return '<div class="tile"><div class="k">' + esc(key) + '</div><div class="v">' + esc(value) + '</div><div class="s">' + esc(sub) + "</div></div>";
 }
 
-function renderTiles(r: Plan): string {
+function renderTiles(r: Plan, live: LiveState | null): string {
   const perStop = r.stops > 0 ? "about " + (r.pitSecondsTotal / r.stops).toFixed(0) + " s per stop" : "no stops needed";
   const limit = r.stintLimitedBy === "tyres" ? "tyres" : "fuel";
   return '<div class="tiles">' +
     tile("Total laps", r.totalLaps, "finish at " + formatHms(r.finishSeconds)) +
-    tile("Pit stops", r.stops, r.tyresUsed + " tyres used") +
+    tile(live ? "Stops to go" : "Pit stops", r.stops, r.tyresUsed + " tyres used" + (live ? " in total" : "")) +
     tile("Time in pits", formatMs(r.pitSecondsTotal), perStop) +
     tile("Full stint", r.fullStintLaps + " laps", "limited by " + limit) +
     "</div>";
@@ -58,13 +58,17 @@ export function stintInfo(s: Stint): string {
   return html;
 }
 
-function axisTicks(total: number): string {
+/** Time labels under the timeline, which runs from `from` to `to` on the race clock. */
+function axisTicks(from: number, to: number): string {
+  const span = to - from;
   // Pick the smallest step that gives at most six labels, so they fit on a phone.
   const steps = [300, 600, 900, 1800, 3600, 7200, 14400, 21600, 43200];
-  const step = steps.find((s) => total / s <= 6) ?? 86400;
-  let html = "";
-  for (let t = 0; t < total; t += step) {
-    const pct = (t / total) * 100;
+  const step = steps.find((s) => span / s <= 6) ?? 86400;
+  let html = '<span class="tick" style="left:0%">' + formatHm(from) + "</span>";
+  // After the first label, use round times.
+  for (let t = Math.ceil((from + 1) / step) * step; t < to; t += step) {
+    const pct = ((t - from) / span) * 100;
+    if (pct < 8) continue; // too close to the first label
     if (pct > 92) break; // too close to the right edge to fit a label
     html += '<span class="tick" style="left:' + pct.toFixed(3) + '%">' + formatHm(t) + "</span>";
   }
@@ -72,7 +76,9 @@ function axisTicks(total: number): string {
 }
 
 function renderTimeline(r: Plan): string {
-  const total = r.finishSeconds;
+  // Before the race the timeline starts at zero. In a re-plan it starts at the current race time.
+  const from = r.stints[0]?.startSeconds ?? 0;
+  const total = Math.max(1, r.finishSeconds - from);
   let segs = "";
   for (const s of r.stints) {
     const width = ((s.endSeconds - s.startSeconds) / total) * 100;
@@ -85,11 +91,11 @@ function renderTimeline(r: Plan): string {
   }
   return '<div class="panel"><h3>Race timeline</h3>' +
     '<div class="timeline">' + segs + "</div>" +
-    '<div class="axis" aria-hidden="true">' + axisTicks(total) + "</div>" +
+    '<div class="axis" aria-hidden="true">' + axisTicks(from, r.finishSeconds) + "</div>" +
     '<p class="info" id="info">Tap or hover a stint to see its details. Striped blocks are pit stops.</p></div>';
 }
 
-function renderDrivers(r: Plan): string {
+function renderDrivers(r: Plan, live: LiveState | null): string {
   const driving = r.perDriver.reduce((sum, d) => sum + d.seconds, 0);
   let rows = "";
   for (const d of r.perDriver) {
@@ -101,7 +107,7 @@ function renderDrivers(r: Plan): string {
       '<span class="time">' + formatHms(d.seconds) + "</span>" +
       '<span class="count">' + share.toFixed(0) + "% · " + stints + (stints === 1 ? " stint" : " stints") + "</span></div>";
   }
-  return '<div class="panel"><h3>Time at the wheel</h3><div class="drivers">' + rows + "</div></div>";
+  return '<div class="panel"><h3>' + (live ? "Time at the wheel from now" : "Time at the wheel") + '</h3><div class="drivers">' + rows + "</div></div>";
 }
 
 function cell(label: string, html: string, cls = ""): string {
@@ -109,7 +115,7 @@ function cell(label: string, html: string, cls = ""): string {
   return "<td" + (cls ? ' class="' + cls + '"' : "") + ' data-label="' + label + '"><span>' + html + "</span></td>";
 }
 
-function renderTable(r: Plan): string {
+function renderTable(r: Plan, live: LiveState | null): string {
   let rows = "";
   for (const s of r.stints) {
     const stop = s.stop;
@@ -121,7 +127,7 @@ function renderTable(r: Plan): string {
     const changed = stop?.tyresChanged ?? 0;
     rows += '<tr data-stint="' + s.n + '"' + (s.final ? ' class="final"' : "") + ">" +
       cell("Stint", String(s.n)) +
-      cell("Driver", '<i class="chip" style="background:' + colour(s.driverIndex) + '"></i>' + esc(s.driver), "l") +
+      cell("Driver", '<i class="chip" style="background:' + colour(s.driverIndex) + '"></i>' + esc(s.driver) + (live && s === r.stints[0] ? ' <span class="badge now">now</span>' : ""), "l") +
       cell("Laps", s.firstLap + "–" + s.lastLap) +
       cell("Count", String(s.laps)) +
       cell("Out", formatHms(s.startSeconds)) +
@@ -154,6 +160,15 @@ function renderWarnings(r: Plan): string {
   );
 }
 
-export function renderPlan(r: Plan): string {
-  return renderWarnings(r) + renderTiles(r) + renderTimeline(r) + renderDrivers(r) + renderTable(r);
+/** A strip above the plan that says it is a re-plan, and from which moment. */
+function renderLiveBar(r: Plan, live: LiveState | null): string {
+  if (!live) return "";
+  const first = r.stints[0];
+  return '<div class="livebar"><span class="dot"></span><strong>Re-plan</strong><span>from lap ' + (live.lapsDone + 1) +
+    ' · ' + formatHms(live.timeLeftSeconds) + ' left' +
+    (live.boxThisLap && first && first.stop ? ' · boxing at the end of this lap' : "") + "</span></div>";
+}
+
+export function renderPlan(r: Plan, live: LiveState | null = null): string {
+  return renderLiveBar(r, live) + renderWarnings(r) + renderTiles(r, live) + renderTimeline(r) + renderDrivers(r, live) + renderTable(r, live);
 }
