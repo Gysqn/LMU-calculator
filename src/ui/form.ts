@@ -1,11 +1,21 @@
 import { parseLapTime } from "../calc/time";
 import type { PlanInput } from "../calc/types";
 
-// Reads the form, and saves and restores it in the browser (localStorage).
+// Reads and checks the form, shows errors next to the fields,
+// and saves and restores the form in the browser (localStorage).
 
 const TEXT_IDS = ["hours", "mins", "lap", "fuel", "tank", "startFuel", "margin", "wear", "tyreMin", "lane", "rate", "tyre", "swap", "drivers"] as const;
 const CHECK_IDS = ["together", "rotate"] as const;
 const STORAGE_KEY = "stint-planner-v2";
+
+export type FieldId = (typeof TEXT_IDS)[number];
+export type FieldErrors = Partial<Record<FieldId, string>>;
+
+export interface FormRead {
+  /** null when one or more fields are wrong. */
+  input: PlanInput | null;
+  errors: FieldErrors;
+}
 
 function field(id: string): HTMLInputElement {
   const el = document.getElementById(id);
@@ -14,44 +24,108 @@ function field(id: string): HTMLInputElement {
 }
 
 /** Number from a field. Empty or invalid text gives NaN. */
-function num(id: string): number {
+function num(id: FieldId): number {
   return parseFloat(field(id).value.replace(",", "."));
 }
 
-/** Number from a field, with a fallback for an empty field. */
-function numOr(id: string, fallback: number): number {
-  const n = num(id);
-  return Number.isNaN(n) ? fallback : n;
+function isEmpty(id: FieldId): boolean {
+  return field(id).value.trim() === "";
 }
 
-export type FormResult = { ok: true; input: PlanInput } | { ok: false; error: string };
+export function readForm(): FormRead {
+  const errors: FieldErrors = {};
 
-export function readForm(): FormResult {
+  // A required number that must be above zero.
+  const positive = (id: FieldId, what: string): number => {
+    const n = num(id);
+    if (!(n > 0)) errors[id] = isEmpty(id) ? "Enter " + what + "." : "Must be more than 0.";
+    return n;
+  };
+  // An optional number that may be zero. Empty counts as zero.
+  const zeroOrMore = (id: FieldId): number => {
+    if (isEmpty(id)) return 0;
+    const n = num(id);
+    if (!(n >= 0)) errors[id] = "Cannot be negative.";
+    return n;
+  };
+
+  const hours = zeroOrMore("hours");
+  const mins = zeroOrMore("mins");
+  const raceSeconds = hours * 3600 + mins * 60;
+  if (!errors.hours && !errors.mins && !(raceSeconds > 0)) errors.hours = "Enter a race length.";
+
   const lapSeconds = parseLapTime(field("lap").value);
   // Under 20 seconds is almost certainly a half-typed lap time, not a real one.
-  if (lapSeconds === null || lapSeconds < 20) {
-    return { ok: false, error: "Enter a lap time like 3:32.0 (minutes:seconds)." };
+  if (lapSeconds === null || lapSeconds < 20) errors.lap = "Use minutes:seconds, like 3:32.0.";
+
+  const fuelPerLap = positive("fuel", "the fuel use");
+  const tankLitres = positive("tank", "the tank size");
+  // An empty start fuel field means a full tank.
+  let startFuelLitres = tankLitres;
+  if (!isEmpty("startFuel")) {
+    startFuelLitres = num("startFuel");
+    if (!(startFuelLitres > 0)) errors.startFuel = "Must be more than 0.";
+    else if (tankLitres > 0 && startFuelLitres > tankLitres) errors.startFuel = "More than the tank holds.";
   }
-  const tankLitres = num("tank");
-  const input: PlanInput = {
-    raceSeconds: numOr("hours", 0) * 3600 + numOr("mins", 0) * 60,
-    lapSeconds,
-    fuelPerLap: num("fuel"),
-    tankLitres,
-    marginLaps: numOr("margin", 0),
-    // An empty start fuel field means a full tank.
-    startFuelLitres: numOr("startFuel", tankLitres),
-    pitLaneLossSeconds: numOr("lane", 0),
-    refuelRate: num("rate"),
-    tyreChangeSeconds: numOr("tyre", 0),
-    driverSwapSeconds: numOr("swap", 0),
-    simultaneousService: field("together").checked,
-    tyreWearPerLap: numOr("wear", 0),
-    tyreMinCondition: numOr("tyreMin", 0),
-    drivers: field("drivers").value.split(",").map((d) => d.trim()).filter(Boolean),
-    rotateDrivers: field("rotate").checked,
+  const marginLaps = zeroOrMore("margin");
+  const tyreWearPerLap = zeroOrMore("wear");
+  const tyreMinCondition = zeroOrMore("tyreMin");
+  if (!errors.tyreMin && tyreMinCondition >= 100) errors.tyreMin = "Must be below 100.";
+  const pitLaneLossSeconds = zeroOrMore("lane");
+  const refuelRate = positive("rate", "the refuel rate");
+  const tyreChangeSeconds = zeroOrMore("tyre");
+  const driverSwapSeconds = zeroOrMore("swap");
+
+  if (Object.keys(errors).length > 0 || lapSeconds === null) return { input: null, errors };
+
+  return {
+    errors,
+    input: {
+      raceSeconds,
+      lapSeconds,
+      fuelPerLap,
+      tankLitres,
+      marginLaps,
+      startFuelLitres,
+      pitLaneLossSeconds,
+      refuelRate,
+      tyreChangeSeconds,
+      driverSwapSeconds,
+      simultaneousService: field("together").checked,
+      tyreWearPerLap,
+      tyreMinCondition,
+      drivers: field("drivers").value.split(",").map((d) => d.trim()).filter(Boolean),
+      rotateDrivers: field("rotate").checked,
+    },
   };
-  return { ok: true, input };
+}
+
+/** Mark wrong fields and show the reason under each one. */
+export function showErrors(errors: FieldErrors): void {
+  for (const id of TEXT_IDS) {
+    const input = field(id);
+    const label = input.closest("label");
+    if (!label) continue;
+    const message = errors[id];
+    let note = label.querySelector<HTMLElement>(".err");
+    if (message) {
+      if (!note) {
+        note = document.createElement("small");
+        note.className = "err";
+        note.id = id + "-err";
+        label.append(note);
+      }
+      note.textContent = message;
+      label.classList.add("invalid");
+      input.setAttribute("aria-invalid", "true");
+      input.setAttribute("aria-describedby", note.id);
+    } else {
+      note?.remove();
+      label.classList.remove("invalid");
+      input.removeAttribute("aria-invalid");
+      input.removeAttribute("aria-describedby");
+    }
+  }
 }
 
 export function saveForm(): void {
@@ -81,4 +155,23 @@ export function restoreForm(): void {
   } catch {
     // Unreadable saved data: keep the defaults.
   }
+}
+
+/** Put every field back to the value written in index.html. */
+export function resetForm(): void {
+  for (const id of TEXT_IDS) field(id).value = field(id).defaultValue;
+  for (const id of CHECK_IDS) field(id).checked = field(id).defaultChecked;
+}
+
+/** Set the race length fields, used by the preset buttons. */
+export function setRaceLength(hours: number): void {
+  field("hours").value = String(hours);
+  field("mins").value = "0";
+}
+
+/** Race length as typed, in minutes. NaN when the fields are not valid numbers. */
+export function raceLengthMinutes(): number {
+  const h = isEmpty("hours") ? 0 : num("hours");
+  const m = isEmpty("mins") ? 0 : num("mins");
+  return h * 60 + m;
 }

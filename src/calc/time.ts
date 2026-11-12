@@ -28,6 +28,12 @@ export function formatHms(seconds: number): string {
   return h + ":" + pad2(m) + ":" + pad2(sec % 60);
 }
 
+/** 5400 -> "1:30" (hours and minutes) */
+export function formatHm(seconds: number): string {
+  const min = Math.round(seconds / 60);
+  return Math.floor(min / 60) + ":" + pad2(min % 60);
+}
+
 /** 125 -> "2:05" */
 export function formatMs(seconds: number): string {
   const sec = Math.round(seconds);

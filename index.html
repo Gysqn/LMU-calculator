@@ -11,52 +11,86 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Stint Planner</h1>
-    <p>Fuel, tyres, pit stops and driver swaps for endurance races.</p>
+    <div>
+      <h1>Stint Planner</h1>
+      <p>Fuel, tyres, pit stops and driver swaps for endurance races.</p>
+    </div>
+    <div class="actions">
+      <button type="button" class="ghost" id="reset">Reset</button>
+      <button type="button" class="ghost" id="theme">Theme: Auto</button>
+    </div>
   </header>
 
   <div class="grid">
-    <form class="panel" id="form" autocomplete="off">
+    <form class="panel" id="form" autocomplete="off" novalidate>
       <fieldset>
         <legend>Race</legend>
-        <label>Hours <input id="hours" type="number" min="0" step="1" value="6"></label>
-        <label>Minutes <input id="mins" type="number" min="0" max="59" step="1" value="0"></label>
-        <label class="wide">Average lap time (m:ss.sss) <input id="lap" type="text" value="3:32.0" inputmode="decimal"></label>
+        <div class="chips wide" id="presets" role="group" aria-label="Race length presets">
+          <button type="button" data-hours="1">1 h</button>
+          <button type="button" data-hours="2">2 h</button>
+          <button type="button" data-hours="4">4 h</button>
+          <button type="button" data-hours="6">6 h</button>
+          <button type="button" data-hours="8">8 h</button>
+          <button type="button" data-hours="12">12 h</button>
+          <button type="button" data-hours="24">24 h</button>
+        </div>
+        <label class="f"><span class="lab">Length</span>
+          <span class="in"><input id="hours" type="number" min="0" step="1" value="6" inputmode="numeric"><span class="unit">h</span></span></label>
+        <label class="f"><span class="lab">&nbsp;</span>
+          <span class="in"><input id="mins" type="number" min="0" max="59" step="1" value="0" inputmode="numeric" aria-label="Minutes"><span class="unit">min</span></span></label>
+        <label class="f wide"><span class="lab">Average lap time</span>
+          <span class="in"><input id="lap" type="text" value="3:32.0" inputmode="decimal"><span class="unit">m:ss.s</span></span></label>
       </fieldset>
+
       <fieldset>
         <legend>Fuel</legend>
-        <label>Per lap (L) <input id="fuel" type="number" min="0.1" step="0.01" value="3.60"></label>
-        <label>Tank (L) <input id="tank" type="number" min="1" step="0.5" value="90"></label>
-        <label>Fuel at the start (L) <input id="startFuel" type="number" min="0" step="0.5" placeholder="Full tank"></label>
-        <label>Safety margin (laps) <input id="margin" type="number" min="0" step="0.5" value="1"></label>
-        <p class="hint">Leave the start fuel empty to start with a full tank. The margin is fuel that always stays in the tank.</p>
+        <label class="f"><span class="lab">Use per lap</span>
+          <span class="in"><input id="fuel" type="number" min="0.1" step="0.01" value="3.60" inputmode="decimal"><span class="unit">L</span></span></label>
+        <label class="f"><span class="lab">Tank size</span>
+          <span class="in"><input id="tank" type="number" min="1" step="0.5" value="90" inputmode="decimal"><span class="unit">L</span></span></label>
+        <label class="f"><span class="lab">Fuel at the start</span>
+          <span class="in"><input id="startFuel" type="number" min="0" step="0.5" placeholder="Full tank" inputmode="decimal"><span class="unit">L</span></span></label>
+        <label class="f"><span class="lab">Safety margin</span>
+          <span class="in"><input id="margin" type="number" min="0" step="0.5" value="1" inputmode="decimal"><span class="unit">laps</span></span></label>
+        <p class="hint">Leave the start fuel empty for a full tank. The margin is fuel that always stays in the tank.</p>
       </fieldset>
+
       <fieldset>
         <legend>Tyres</legend>
-        <label>Wear per lap (%) <input id="wear" type="number" min="0" step="0.1" value="2.0"></label>
-        <label>Minimum condition (%) <input id="tyreMin" type="number" min="0" max="99" step="1" value="50"></label>
-        <p class="hint">Tyres are changed at a stop when the current set would drop below the minimum during the next stint. Set wear to 0 to never change tyres.</p>
+        <label class="f"><span class="lab">Wear per lap</span>
+          <span class="in"><input id="wear" type="number" min="0" step="0.1" value="2.0" inputmode="decimal"><span class="unit">%</span></span></label>
+        <label class="f"><span class="lab">Minimum condition</span>
+          <span class="in"><input id="tyreMin" type="number" min="0" max="99" step="1" value="50" inputmode="decimal"><span class="unit">%</span></span></label>
+        <p class="hint">You get new tyres at a stop when the current set would drop below the minimum during the next stint. Wear 0 means never change.</p>
       </fieldset>
+
       <fieldset>
         <legend>Pit stop</legend>
-        <label>Pit lane loss (s) <input id="lane" type="number" min="0" step="0.5" value="28"></label>
-        <label>Refuel rate (L/s) <input id="rate" type="number" min="0.1" step="0.1" value="2.5"></label>
-        <label>Tyre change (s) <input id="tyre" type="number" min="0" step="0.5" value="12"></label>
-        <label>Driver swap (s) <input id="swap" type="number" min="0" step="0.5" value="8"></label>
-        <label class="check wide"><input id="together" type="checkbox" checked> Refuel and change tyres at the same time</label>
-        <p class="hint">Ticked: stationary time is the longer of refuelling and the tyre change. Unticked: they are added up. A driver swap is added when the driver changes.</p>
+        <label class="f"><span class="lab">Pit lane loss</span>
+          <span class="in"><input id="lane" type="number" min="0" step="0.5" value="28" inputmode="decimal"><span class="unit">s</span></span></label>
+        <label class="f"><span class="lab">Refuel rate</span>
+          <span class="in"><input id="rate" type="number" min="0.1" step="0.1" value="2.5" inputmode="decimal"><span class="unit">L/s</span></span></label>
+        <label class="f"><span class="lab">Tyre change</span>
+          <span class="in"><input id="tyre" type="number" min="0" step="0.5" value="12" inputmode="decimal"><span class="unit">s</span></span></label>
+        <label class="f"><span class="lab">Driver swap</span>
+          <span class="in"><input id="swap" type="number" min="0" step="0.5" value="8" inputmode="decimal"><span class="unit">s</span></span></label>
+        <label class="check wide"><input id="together" type="checkbox" checked> <span>Refuel and change tyres at the same time</span></label>
+        <p class="hint">Ticked: the stop takes as long as the slower of the two. Unticked: their times are added up.</p>
       </fieldset>
-      <fieldset>
+
+      <fieldset class="last">
         <legend>Drivers</legend>
-        <label class="wide">Names, separated by commas <input id="drivers" type="text" value="Alex, Sam, Kim"></label>
-        <label class="check wide"><input id="rotate" type="checkbox" checked> Swap driver at every stop</label>
+        <label class="f wide"><span class="lab">Names, separated by commas</span>
+          <span class="in"><input id="drivers" type="text" value="Alex, Sam, Kim"></span></label>
+        <label class="check wide"><input id="rotate" type="checkbox" checked> <span>Swap driver at every stop</span></label>
       </fieldset>
-      <p class="note">The starting numbers are placeholders. Enter your own lap time, fuel use, tyre wear and pit times from practice.</p>
+      <p class="note">The starting numbers are placeholders. Use your own numbers from practice. Everything is saved in this browser.</p>
     </form>
 
     <div id="out" class="stack" aria-live="polite"></div>
   </div>
 </div>
+<a href="#out" class="jump" id="jump" hidden></a>
 <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

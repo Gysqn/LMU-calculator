@@ -1,5 +1,5 @@
-import { formatHms, formatMs } from "../calc/time";
-import type { Plan } from "../calc/types";
+import { formatHm, formatHms, formatMs } from "../calc/time";
+import type { Plan, Stint } from "../calc/types";
 
 // Turns a plan into HTML. Everything the user typed goes through esc() first.
 
@@ -14,8 +14,8 @@ function colour(driverIndex: number): string {
   return "var(--d" + ((driverIndex % 4) + 1) + ")";
 }
 
-export function renderMessage(text: string): string {
-  return '<div class="msg">' + esc(text) + "</div>";
+export function renderMessage(title: string, text: string): string {
+  return '<div class="msg" role="status"><strong>' + esc(title) + "</strong><span>" + esc(text) + "</span></div>";
 }
 
 function tile(key: string, value: string | number, sub: string): string {
@@ -23,14 +23,41 @@ function tile(key: string, value: string | number, sub: string): string {
 }
 
 function renderTiles(r: Plan): string {
-  const perStop = r.stops > 0 ? (r.pitSecondsTotal / r.stops).toFixed(0) + " s per stop" : "No stops";
-  const limit = r.stintLimitedBy === "tyres" ? ", limited by tyres" : "";
+  const perStop = r.stops > 0 ? "about " + (r.pitSecondsTotal / r.stops).toFixed(0) + " s per stop" : "no stops needed";
+  const limit = r.stintLimitedBy === "tyres" ? "tyres" : "fuel";
   return '<div class="tiles">' +
-    tile("Total laps", r.totalLaps, "Finish at " + formatHms(r.finishSeconds)) +
+    tile("Total laps", r.totalLaps, "finish at " + formatHms(r.finishSeconds)) +
     tile("Pit stops", r.stops, r.tyreChanges + " with new tyres") +
     tile("Time in pits", formatMs(r.pitSecondsTotal), perStop) +
-    tile("Stints", r.stints.length, "Up to " + r.fullStintLaps + " laps" + limit) +
+    tile("Full stint", r.fullStintLaps + " laps", "limited by " + limit) +
     "</div>";
+}
+
+/** One line that describes a stint. Shown under the timeline when a stint is picked. */
+export function stintInfo(s: Stint): string {
+  let html = "<strong>Stint " + s.n + " · " + esc(s.driver) + "</strong> " +
+    "laps " + s.firstLap + "–" + s.lastLap + " (" + s.laps + ") · " +
+    formatHms(s.startSeconds) + " to " + formatHms(s.endSeconds) + " · ";
+  if (s.stop) {
+    html += "then box: add " + s.stop.fuelAdded.toFixed(1) + " L, " +
+      (s.stop.tyresChanged ? "new tyres" : "keep tyres") + ", " + s.stop.pitSeconds.toFixed(0) + " s";
+  } else {
+    html += "takes the finish";
+  }
+  return html;
+}
+
+function axisTicks(total: number): string {
+  // Pick the smallest step that gives at most six labels, so they fit on a phone.
+  const steps = [300, 600, 900, 1800, 3600, 7200, 14400, 21600, 43200];
+  const step = steps.find((s) => total / s <= 6) ?? 86400;
+  let html = "";
+  for (let t = 0; t < total; t += step) {
+    const pct = (t / total) * 100;
+    if (pct > 92) break; // too close to the right edge to fit a label
+    html += '<span class="tick" style="left:' + pct.toFixed(3) + '%">' + formatHm(t) + "</span>";
+  }
+  return html;
 }
 
 function renderTimeline(r: Plan): string {
@@ -38,52 +65,71 @@ function renderTimeline(r: Plan): string {
   let segs = "";
   for (const s of r.stints) {
     const width = ((s.endSeconds - s.startSeconds) / total) * 100;
-    segs += '<div class="seg" style="flex:' + width.toFixed(3) + " 1 0;background:" + colour(s.driverIndex) +
-      '" title="Stint ' + s.n + ", " + esc(s.driver) + '">' + (width > 5 ? esc(s.driver) : "") + "</div>";
+    segs += '<button type="button" class="seg" data-stint="' + s.n + '" style="flex:' + width.toFixed(3) +
+      " 1 0;background:" + colour(s.driverIndex) + '" aria-label="Stint ' + s.n + ", " + esc(s.driver) + '">' +
+      (width > 7 ? "<span>" + esc(s.driver) + "</span>" : "") + "</button>";
     if (s.stop) {
-      segs += '<div class="seg pit" style="flex:' + ((s.stop.pitSeconds / total) * 100).toFixed(3) +
-        ' 1 0" title="Pit stop ' + s.n + '"></div>';
+      segs += '<div class="pit" style="flex:' + ((s.stop.pitSeconds / total) * 100).toFixed(3) + ' 1 0"></div>';
     }
   }
-  let legend = "";
-  for (const d of r.perDriver) {
-    legend += '<span><i class="sw" style="background:' + colour(d.driverIndex) + '"></i>' + esc(d.driver) + " " +
-      formatHms(d.seconds) + " at the wheel</span>";
-  }
-  legend += '<span><i class="sw" style="background:repeating-linear-gradient(45deg,var(--ink) 0 2px,var(--panel) 2px 4px)"></i>Pit stop</span>';
+  return '<div class="panel"><h2>Race timeline</h2>' +
+    '<div class="timeline">' + segs + "</div>" +
+    '<div class="axis" aria-hidden="true">' + axisTicks(total) + "</div>" +
+    '<p class="info" id="info">Tap or hover a stint to see its details. Striped blocks are pit stops.</p></div>';
+}
 
-  return '<div class="panel"><h2>Race timeline</h2><div class="timeline">' + segs + "</div>" +
-    '<div class="axis"><span>0:00</span><span>' + formatHms(total / 2) + "</span><span>" + formatHms(total) + "</span></div>" +
-    '<div class="legend">' + legend + "</div></div>";
+function renderDrivers(r: Plan): string {
+  const driving = r.perDriver.reduce((sum, d) => sum + d.seconds, 0);
+  let rows = "";
+  for (const d of r.perDriver) {
+    const stints = r.stints.filter((s) => s.driverIndex === d.driverIndex).length;
+    const share = driving > 0 ? (d.seconds / driving) * 100 : 0;
+    rows += '<div class="driver">' +
+      '<span class="name"><i class="chip" style="background:' + colour(d.driverIndex) + '"></i>' + esc(d.driver) + "</span>" +
+      '<span class="meter"><i style="width:' + share.toFixed(1) + "%;background:" + colour(d.driverIndex) + '"></i></span>' +
+      '<span class="time">' + formatHms(d.seconds) + "</span>" +
+      '<span class="count">' + share.toFixed(0) + "% · " + stints + (stints === 1 ? " stint" : " stints") + "</span></div>";
+  }
+  return '<div class="panel"><h2>Time at the wheel</h2><div class="drivers">' + rows + "</div></div>";
+}
+
+function cell(label: string, html: string, cls = ""): string {
+  // data-label is shown on phones, where each stint becomes a card instead of a table row.
+  return "<td" + (cls ? ' class="' + cls + '"' : "") + ' data-label="' + label + '"><span>' + html + "</span></td>";
 }
 
 function renderTable(r: Plan): string {
   let rows = "";
   for (const s of r.stints) {
     const stop = s.stop;
-    rows += "<tr" + (s.final ? ' class="final"' : "") + ">" +
-      "<td>" + s.n + "</td>" +
-      '<td class="l"><i class="chip" style="background:' + colour(s.driverIndex) + '"></i>' + esc(s.driver) + "</td>" +
-      "<td>" + s.firstLap + "–" + s.lastLap + "</td>" +
-      "<td>" + s.laps + "</td>" +
-      "<td>" + formatHms(s.startSeconds) + "</td>" +
-      "<td>" + formatHms(s.endSeconds) + "</td>" +
-      "<td>" + s.fuelAtStart.toFixed(1) + "</td>" +
-      "<td>" + s.tyreAtEnd.toFixed(0) + "%</td>" +
-      "<td>" + (stop ? stop.fuelAdded.toFixed(1) : "Finish") + "</td>" +
-      "<td>" + (stop ? (stop.tyresChanged ? '<span class="new">New</span>' : "Keep") : "–") + "</td>" +
-      "<td>" + (stop ? stop.pitSeconds.toFixed(0) + " s" : "–") + "</td></tr>";
+    const tyres = '<span class="tyre"><span class="meter"><i style="width:' + Math.max(0, s.tyreAtEnd).toFixed(0) + '%"></i></span>' +
+      s.tyreAtEnd.toFixed(0) + "%</span>";
+    rows += '<tr data-stint="' + s.n + '"' + (s.final ? ' class="final"' : "") + ">" +
+      cell("Stint", String(s.n)) +
+      cell("Driver", '<i class="chip" style="background:' + colour(s.driverIndex) + '"></i>' + esc(s.driver), "l") +
+      cell("Laps", s.firstLap + "–" + s.lastLap) +
+      cell("Count", String(s.laps)) +
+      cell("Out", formatHms(s.startSeconds)) +
+      cell("In", formatHms(s.endSeconds)) +
+      cell("Fuel at start", s.fuelAtStart.toFixed(1) + " L") +
+      cell("Tyres at end", tyres) +
+      cell("Add fuel", stop ? stop.fuelAdded.toFixed(1) + " L" : '<span class="badge flag">Finish</span>') +
+      cell("Tyres", stop ? (stop.tyresChanged ? '<span class="badge new">New</span>' : '<span class="badge">Keep</span>') : "–") +
+      cell("Pit time", stop ? stop.pitSeconds.toFixed(0) + " s" : "–") +
+      "</tr>";
   }
-  return '<div class="panel"><h2>Stint sheet</h2><div class="tablewrap"><table><thead><tr>' +
+  return '<div class="panel"><div class="panelhead"><h2>Stint sheet</h2>' +
+    '<div class="row"><span id="copied" class="note" role="status"></span><button type="button" id="copy">Copy plan</button></div></div>' +
+    '<div class="tablewrap"><table class="sheet"><thead>' +
+    '<tr class="groups"><th colspan="8"></th><th colspan="3">At the stop after this stint</th></tr><tr>' +
     '<th>#</th><th class="l">Driver</th><th>Laps</th><th>Count</th><th>Out</th><th>In</th>' +
-    "<th>Fuel on board (L)</th><th>Tyres at end</th><th>Add at stop (L)</th><th>Tyres at stop</th><th>Pit time</th>" +
+    "<th>Fuel at start</th><th>Tyres at end</th><th>Add fuel</th><th>Tyres</th><th>Pit time</th>" +
     "</tr></thead><tbody>" + rows + "</tbody></table></div>" +
+    '<textarea id="plain" readonly hidden aria-label="Plan as plain text"></textarea>' +
     '<p class="note">Times are race clock (h:mm:ss). The last stint runs until the first lap that finishes after the clock hits zero. ' +
-    "Tyre wear is a straight line and lap times stay the same on worn tyres. Traffic and safety cars are not modelled, so keep your margin.</p>" +
-    '<div class="row" style="margin-top:12px"><button type="button" id="copy">Copy plan</button><span id="copied" class="note" style="margin:0"></span></div>' +
-    '<textarea id="plain" readonly hidden aria-label="Plan as plain text"></textarea></div>';
+    "Tyre wear is a straight line and lap times stay the same on worn tyres. Traffic and safety cars are not modelled, so keep your margin.</p></div>";
 }
 
 export function renderPlan(r: Plan): string {
-  return renderTiles(r) + renderTimeline(r) + renderTable(r);
+  return renderTiles(r) + renderTimeline(r) + renderDrivers(r) + renderTable(r);
 }

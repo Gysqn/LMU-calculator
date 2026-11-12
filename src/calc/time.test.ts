@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatHms, formatLapTime, formatMs, parseLapTime } from "./time";
+import { formatHm, formatHms, formatLapTime, formatMs, parseLapTime } from "./time";
 
 describe("parseLapTime", () => {
   it("reads minutes and seconds", () => {
@@ -33,6 +33,12 @@ describe("formatting", () => {
     expect(formatHms(0)).toBe("0:00:00");
     expect(formatHms(21600)).toBe("6:00:00");
     expect(formatHms(3725.4)).toBe("1:02:05");
+  });
+
+  it("formats hours and minutes", () => {
+    expect(formatHm(0)).toBe("0:00");
+    expect(formatHm(5400)).toBe("1:30");
+    expect(formatHm(86400)).toBe("24:00");
   });
 
   it("formats minutes and seconds", () => {
