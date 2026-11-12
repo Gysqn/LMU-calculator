@@ -114,12 +114,10 @@
           <span class="in"><input id="lane" type="number" min="0" step="0.5" value="28" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Refuel rate</span>
           <span class="in"><input id="rate" type="number" min="0.1" step="0.1" value="2.5" inputmode="decimal"><span class="unit">L/s</span></span></label>
-        <label class="f"><span class="lab">Change 4 tyres</span>
-          <span class="in"><input id="tyre" type="number" min="0" step="0.5" value="12" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Driver swap</span>
           <span class="in"><input id="swap" type="number" min="0" step="0.5" value="8" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="check wide"><input id="together" type="checkbox" checked> <span>Refuel and change tyres at the same time</span></label>
-        <p class="hint" id="togetherHint">Ticked: the stop takes as long as the slower of the two. Unticked: their times are added up. Changing 2 tyres always takes 6 seconds.</p>
+        <p class="hint" id="togetherHint">Ticked: the stop takes as long as the slower of the two. Unticked: their times are added up. Changing 2 tyres takes 6 seconds, all 4 takes 12.</p>
       </fieldset>
 
       <fieldset class="last">
@@ -175,7 +173,7 @@
     </article>
     <article class="panel">
       <h3>Pit stop time</h3>
-      <p>Pit lane loss plus the time you stand still. Standing still is refuelling and the tyre change, together or one after the other, plus a driver swap.</p>
+      <p>Pit lane loss plus the time you stand still. Standing still is refuelling and the tyre change, together or one after the other, plus a driver swap. Changing 2 tyres takes 6 seconds, all 4 takes 12.</p>
       <p class="example">86.4 L ÷ 2.5 L/s = 34.6 s refuelling<br>28 s lane + 34.6 s + 8 s swap = <strong>71 s</strong></p>
     </article>
     <article class="panel">
