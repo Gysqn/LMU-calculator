@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { fuelStintLaps, lapsToFinish, planRace, stationarySeconds, tyreStintLaps } from "./plan";
+import { fuelStintLaps, lapsToFinish, planRace, spreadChanges, stationarySeconds, tyreStintLaps } from "./plan";
 import type { Plan, PlanInput } from "./types";
 
 // The example race from SPEC.md. Tyre wear is off (0) unless a test turns it on.
@@ -13,12 +13,13 @@ function input(overrides: Partial<PlanInput> = {}): PlanInput {
     startFuelLitres: 90,
     pitLaneLossSeconds: 28,
     refuelRate: 2.5,
-    tyreChangeSeconds: 12,
+    tyreChange2Seconds: 8,
+    tyreChange4Seconds: 12,
     driverSwapSeconds: 8,
     simultaneousService: true,
     tyreWearPerLap: 0,
     tyreMinCondition: 50,
-    maxTyreSets: null,
+    maxTyres: null,
     drivers: ["Alex", "Sam", "Kim"],
     rotateDrivers: true,
     ...overrides,
@@ -149,7 +150,7 @@ describe("planRace: consistency", () => {
         expect(s.fuelAtStart).toBeLessThanOrEqual(c.tankLitres + 1e-6);
         expect(s.fuelAtEnd).toBeGreaterThanOrEqual(marginFuel - 1e-6);
         // Tyres: never under the minimum.
-        if (c.tyreWearPerLap > 0) expect(s.tyreAtEnd).toBeGreaterThanOrEqual(c.tyreMinCondition - 1e-6);
+        if (c.tyreWearPerLap > 0) expect(s.tyresAtEnd[0]).toBeGreaterThanOrEqual(c.tyreMinCondition - 1e-6);
 
         lap = s.lastLap;
         clock = s.endSeconds + (s.stop?.pitSeconds ?? 0);
@@ -207,29 +208,49 @@ describe("planRace: start fuel", () => {
   });
 });
 
+describe("spreadChanges", () => {
+  it("puts one change in the middle", () => {
+    expect(spreadChanges([10, 10, 10, 10], 1)).toEqual([false, true, false]);
+  });
+
+  it("keeps the longest run on one set as short as possible", () => {
+    // Two changes over 24+24+24+24+5 laps: the best split is 48 / 48 / 5.
+    expect(spreadChanges([24, 24, 24, 24, 5], 2)).toEqual([false, true, false, true]);
+    // One change: 48 / 53 beats 72 / 29.
+    expect(spreadChanges([24, 24, 24, 24, 5], 1)).toEqual([false, true, false, false]);
+  });
+
+  it("changes at every stop when there are enough changes", () => {
+    expect(spreadChanges([10, 10, 10], 5)).toEqual([true, true]);
+  });
+
+  it("changes nowhere without changes", () => {
+    expect(spreadChanges([10, 10, 10], 0)).toEqual([false, false]);
+  });
+});
+
 describe("planRace: tyres", () => {
   it("never changes tyres when wear is 0", () => {
     const r = ok(input());
-    expect(r.tyreChanges).toBe(0);
+    expect(r.tyresUsed).toBe(4);
   });
 
   it("double-stints tyres when they last two stints", () => {
-    // 1% per lap, minimum 50%: a set lasts 50 laps, so two 24-lap stints (48 laps) but not three.
+    // 1% per lap, minimum 50%: tyres last 50 laps, so two 24-lap stints (48 laps) but not three.
     const r = ok(input({ tyreWearPerLap: 1, tyreMinCondition: 50 }));
-    expect(r.stints[0]?.stop?.tyresChanged).toBe(false);
-    expect(r.stints[1]?.stop?.tyresChanged).toBe(true);
-    expect(r.stints[2]?.stop?.tyresChanged).toBe(false);
-    expect(r.stints[0]?.tyreAtEnd).toBeCloseTo(76, 6);
-    expect(r.stints[1]?.tyreAtEnd).toBeCloseTo(52, 6);
-    expect(r.stints[2]?.tyreAtStart).toBeCloseTo(100, 6);
+    expect(r.stints.map((s) => s.stop?.tyresChanged ?? null).slice(0, 3)).toEqual([0, 4, 0]);
+    expect(r.stints[0]?.tyresAtEnd[0]).toBeCloseTo(76, 6);
+    expect(r.stints[1]?.tyresAtEnd[0]).toBeCloseTo(52, 6);
+    expect(r.stints[2]?.tyresAtEnd[0]).toBeCloseTo(76, 6); // new tyres were fitted before stint 3
   });
 
-  it("changes tyres at every stop when a set lasts only one stint", () => {
+  it("changes all four tyres at every stop when they last only one stint", () => {
     // 2% per lap, minimum 50%: 25 laps per set, one 24-lap stint.
     const r = ok(input({ tyreWearPerLap: 2, tyreMinCondition: 50 }));
     for (const s of r.stints) {
-      if (s.stop) expect(s.stop.tyresChanged).toBe(true);
+      if (s.stop) expect(s.stop.tyresChanged).toBe(4);
     }
+    expect(r.tyreStrategy).toBe("asNeeded");
   });
 
   it("shortens the stint when tyres wear out before the fuel does", () => {
@@ -241,13 +262,13 @@ describe("planRace: tyres", () => {
     expect(r.stints[0]?.laps).toBe(10);
     // After 10 laps the full tank still holds 54 L, more than the next 10 laps need. So no fuel is added.
     expect(r.stints[0]?.stop?.fuelAdded).toBe(0);
-    expect(r.stints[0]?.stop?.tyresChanged).toBe(true);
+    expect(r.stints[0]?.stop?.tyresChanged).toBe(4);
     expect(r.stints[1]?.fuelAtStart).toBeCloseTo(54, 6);
     // Two stints later the tank is low, and the stop adds only what 10 laps plus margin need.
     expect(r.stints[2]?.fuelAtStart).toBeCloseTo(11 * 3.6, 6);
   });
 
-  it("returns an error when new tyres cannot do one lap", () => {
+  it("returns an error when new tyres cannot do one lap and there is no tyre limit", () => {
     const r = planRace(input({ tyreWearPerLap: 60, tyreMinCondition: 50 }));
     expect(r.ok).toBe(false);
   });
@@ -258,58 +279,81 @@ describe("planRace: tyres", () => {
     const a = together.stints[0]?.stop;
     const b = sequential.stints[0]?.stop;
     expect(a?.stationarySeconds).toBeCloseTo(34.56 + 8, 6); // refuel is longer than the tyre change
-    expect(b?.stationarySeconds).toBeCloseTo(34.56 + 12 + 8, 6);
+    expect(b?.stationarySeconds).toBeCloseTo(34.56 + 12 + 8, 6); // 12 s for four tyres
   });
 });
 
-describe("planRace: limited tyre sets", () => {
-  // 2% per lap, minimum 50%: without a limit this race changes tyres at all 4 stops (5 sets).
+describe("planRace: limited number of tyres", () => {
+  // 2% per lap, minimum 50%: without a limit this race changes all four tyres at all 4 stops.
+  // That is 4 starting tyres + 16 = 20 tyres.
   const wearing = { tyreWearPerLap: 2, tyreMinCondition: 50 };
 
-  it("uses 5 sets without a limit", () => {
+  it("uses 20 tyres without a limit", () => {
     const r = ok(input(wearing));
-    expect(r.tyreSetsUsed).toBe(5);
-    expect(r.firstStintBelowMin).toBeNull();
+    expect(r.tyresUsed).toBe(20);
+    expect(r.tyreStrategy).toBe("asNeeded");
+    expect(r.lowestTyre).toBeCloseTo(52, 6);
   });
 
-  it("changes nothing when the limit is not reached", () => {
+  it("changes nothing when there are enough tyres", () => {
     const free = ok(input(wearing));
-    const limited = ok(input({ ...wearing, maxTyreSets: 5 }));
-    expect(limited.stints).toEqual(free.stints);
+    const limited = ok(input({ ...wearing, maxTyres: 20 }));
+    expect(limited).toEqual(free);
   });
 
-  it("stops changing tyres when the sets run out", () => {
-    const r = ok(input({ ...wearing, maxTyreSets: 3 }));
-    expect(r.stints.map((s) => s.stop?.tyresChanged ?? null)).toEqual([true, true, false, false, null]);
-    expect(r.tyreSetsUsed).toBe(3);
-    // Stint 3 starts on the last new set. Stint 4 is the first on tyres that are too worn.
-    expect(r.stints[2]?.tyreBelowMin).toBe(false);
-    expect(r.stints[3]?.tyreBelowMin).toBe(true);
-    expect(r.firstStintBelowMin).toBe(4);
+  it("spreads the changes over the race when there are too few tyres", () => {
+    // 12 tyres: 8 to change, so each pair is changed twice. Best split of the race: after stints 2 and 4.
+    const r = ok(input({ ...wearing, maxTyres: 12 }));
+    expect(r.tyreStrategy).toBe("spread");
+    expect(r.stints.map((s) => s.stop?.tyresChanged ?? null)).toEqual([0, 4, 0, 4, null]);
+    expect(r.tyresUsed).toBe(12);
+    // The worst moment is after two stints (48 laps) on one set: 100 - 96 = 4%.
+    expect(r.lowestTyre).toBeCloseTo(4, 6);
+    expect(r.lowestTyreStint).toBe(2);
+    expect(r.stints[1]?.tyreBelowMin).toBe(true);
   });
 
-  it("never changes tyres with a single set", () => {
-    const r = ok(input({ ...wearing, maxTyreSets: 1 }));
-    expect(r.tyreChanges).toBe(0);
-    expect(r.tyreSetsUsed).toBe(1);
-    expect(r.firstStintBelowMin).toBe(2);
+  it("changes two tyres when only one pair is left", () => {
+    // 10 tyres: 6 to change, so one pair is changed twice and the other once.
+    const r = ok(input({ ...wearing, maxTyres: 10, simultaneousService: false }));
+    expect(r.stints.map((s) => s.stop?.tyresChanged ?? null)).toEqual([0, 4, 0, 2, null]);
+    expect(r.tyresUsed).toBe(10);
+    // The two-tyre stop uses the two-tyre time (8 s), next to refuelling and the 8 s driver swap.
+    const stop = r.stints[3]?.stop;
+    expect(stop).toBeTruthy();
+    if (stop) expect(stop.stationarySeconds - stop.fuelAdded / 2.5 - 8).toBeCloseTo(8, 6);
+    // After that stop the two pairs have a different age.
+    const last = r.stints[4];
+    expect(last && last.tyresAtEnd[0] < last.tyresAtEnd[1]).toBe(true);
   });
 
-  it("skips the tyre change time when there is no new set", () => {
-    const r = ok(input({ ...wearing, maxTyreSets: 1, simultaneousService: false }));
-    // Refuel 34.56 s plus the swap, without the 12 s tyre change.
+  it("never uses more tyres than allowed", () => {
+    for (const maxTyres of [4, 5, 6, 7, 8, 9, 11, 13, 14, 16, 18, 19]) {
+      const r = ok(input({ ...wearing, raceSeconds: 24 * 3600, maxTyres }));
+      expect(r.tyresUsed).toBeLessThanOrEqual(maxTyres);
+      // Tyres go on in pairs, so at most one tyre is left over.
+      expect(r.tyresUsed).toBeGreaterThanOrEqual(maxTyres - 1);
+    }
+  });
+
+  it("never changes tyres with only the starting four", () => {
+    const r = ok(input({ ...wearing, maxTyres: 4, simultaneousService: false }));
+    expect(r.tyresUsed).toBe(4);
+    // Refuel 34.56 s plus the swap, without any tyre change time.
     expect(r.stints[0]?.stop?.stationarySeconds).toBeCloseTo(34.56 + 8, 6);
   });
 
-  it("goes back to fuel-length stints when tyre-limited stints run out of sets", () => {
-    // 5% per lap: a set lasts 10 laps. With 2 sets, stints 1 and 2 are 10 laps, then fuel decides.
-    const r = ok(input({ tyreWearPerLap: 5, tyreMinCondition: 50, maxTyreSets: 2 }));
-    expect(r.stints.slice(0, 3).map((s) => s.laps)).toEqual([10, 10, 24]);
+  it("drives fuel-length stints when there are too few tyres for tyre-length stints", () => {
+    // 5% per lap: tyres last 10 laps above the minimum. With 8 tyres that cannot be kept up.
+    const r = ok(input({ tyreWearPerLap: 5, tyreMinCondition: 50, maxTyres: 8 }));
+    expect(r.tyreStrategy).toBe("spread");
+    expect(r.stints[0]?.laps).toBe(24);
+    expect(r.tyresUsed).toBeLessThanOrEqual(8);
   });
 
-  it("rejects a number of sets that is not a whole number of at least 1", () => {
-    expect(planRace(input({ maxTyreSets: 0 })).ok).toBe(false);
-    expect(planRace(input({ maxTyreSets: 2.5 })).ok).toBe(false);
+  it("rejects a number of tyres that is not a whole number of at least 4", () => {
+    expect(planRace(input({ maxTyres: 3 })).ok).toBe(false);
+    expect(planRace(input({ maxTyres: 8.5 })).ok).toBe(false);
   });
 });
 

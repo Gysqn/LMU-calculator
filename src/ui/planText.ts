@@ -13,7 +13,7 @@ export function planText(c: PlanInput, r: Plan): string {
       " | " + formatHms(s.startSeconds) + " to " + formatHms(s.endSeconds);
     if (s.stop) {
       line += " | box, add " + s.stop.fuelAdded.toFixed(1) + " L, " +
-        (s.stop.tyresChanged ? "new tyres" : "keep tyres") + ", " + s.stop.pitSeconds.toFixed(0) + " s in the pits";
+        (s.stop.tyresChanged ? s.stop.tyresChanged + " new tyres" : "keep tyres") + ", " + s.stop.pitSeconds.toFixed(0) + " s in the pits";
     } else {
       line += " | finish";
     }

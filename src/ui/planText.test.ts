@@ -12,12 +12,13 @@ const input: PlanInput = {
   startFuelLitres: 90,
   pitLaneLossSeconds: 28,
   refuelRate: 2.5,
-  tyreChangeSeconds: 12,
+  tyreChange2Seconds: 8,
+  tyreChange4Seconds: 12,
   driverSwapSeconds: 8,
   simultaneousService: true,
   tyreWearPerLap: 1,
   tyreMinCondition: 50,
-  maxTyreSets: null,
+  maxTyres: null,
   drivers: ["Alex", "Sam"],
   rotateDrivers: true,
 };
@@ -31,7 +32,7 @@ describe("planText", () => {
     expect(lines[1]).toBe("");
     expect(lines).toHaveLength(r.stints.length + 2);
     expect(lines[2]).toBe("Stint 1 | Alex | laps 1-24 | 0:00:00 to 1:24:48 | box, add 86.4 L, keep tyres, 71 s in the pits");
-    expect(lines[3]).toContain("new tyres");
+    expect(lines[3]).toContain("4 new tyres");
     expect(lines[lines.length - 1]).toMatch(/\| finish$/);
   });
 });

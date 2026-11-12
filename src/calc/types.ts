@@ -16,29 +16,34 @@ export interface PlanInput {
   pitLaneLossSeconds: number;
   /** Litres per second. */
   refuelRate: number;
-  tyreChangeSeconds: number;
+  /** Time to change two tyres, and time to change all four. */
+  tyreChange2Seconds: number;
+  tyreChange4Seconds: number;
   driverSwapSeconds: number;
   /** true: refuelling and the tyre change happen at the same time. false: one after the other. */
   simultaneousService: boolean;
 
-  /** Tyre condition lost per lap, in percent points. 0 means tyres are never changed. */
+  /** Tyre condition lost per lap, in percent points. All tyres wear at this rate. 0 means tyres are never changed. */
   tyreWearPerLap: number;
-  /** Lowest tyre condition (percent) the user is willing to drive on. */
+  /** The tyre condition (percent) the user does not want to go below. */
   tyreMinCondition: number;
   /**
-   * Sets of tyres you may use in the whole race, counting the set you start on.
-   * null means no limit. When the sets run out, the car stays on its old tyres.
+   * Single tyres you may use in the whole race, counting the four you start on.
+   * null means no limit. Tyres are changed two or four at a time.
    */
-  maxTyreSets: number | null;
+  maxTyres: number | null;
 
   drivers: string[];
   /** Change driver at every stop (only has an effect with more than one driver). */
   rotateDrivers: boolean;
 }
 
+/** How many tyres are changed at a stop. Never one or three. */
+export type TyresChanged = 0 | 2 | 4;
+
 export interface PitStop {
   fuelAdded: number;
-  tyresChanged: boolean;
+  tyresChanged: TyresChanged;
   /** Time standing still in the pit box. */
   stationarySeconds: number;
   /** Pit lane loss plus stationary time. */
@@ -59,9 +64,12 @@ export interface Stint {
   laps: number;
   fuelAtStart: number;
   fuelAtEnd: number;
-  tyreAtStart: number;
-  tyreAtEnd: number;
-  /** true when the tyres end this stint under the minimum, because no new sets were left. */
+  /**
+   * The car has two pairs of tyres that can be changed separately.
+   * These are the conditions of both pairs when the stint ends, most worn first.
+   */
+  tyresAtEnd: [number, number];
+  /** true when the most worn pair ends this stint under the minimum. */
   tyreBelowMin: boolean;
   /** true for the stint that takes the chequered flag. */
   final: boolean;
@@ -78,17 +86,22 @@ export interface DriverTime {
 export interface Plan {
   ok: true;
   stints: Stint[];
-  /** Laps of a normal full stint (full tank, new tyres). */
+  /** Laps of a normal full stint. */
   fullStintLaps: number;
   /** What limits a full stint: the fuel tank or the tyres. */
   stintLimitedBy: "fuel" | "tyres";
   totalLaps: number;
   stops: number;
-  tyreChanges: number;
-  /** Sets of tyres used, counting the set the car starts on. */
-  tyreSetsUsed: number;
-  /** First stint that ends under the minimum tyre condition, or null when none does. */
-  firstStintBelowMin: number | null;
+  /** Single tyres used, counting the four the car starts on. */
+  tyresUsed: number;
+  /**
+   * "asNeeded": tyres are changed whenever they would go under the minimum.
+   * "spread": there are too few tyres for that, so the changes are spread evenly over the race.
+   */
+  tyreStrategy: "asNeeded" | "spread";
+  /** The lowest tyre condition in the race, and the stint where it happens. */
+  lowestTyre: number;
+  lowestTyreStint: number;
   pitSecondsTotal: number;
   /** Race clock when the car crosses the finish line. */
   finishSeconds: number;

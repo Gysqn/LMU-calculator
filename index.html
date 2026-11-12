@@ -67,9 +67,10 @@
         <label class="f wide"><span class="lab">Lowest condition you want to drive on</span>
           <span class="in"><input id="tyreMin" type="number" min="0" max="99" step="1" value="50" inputmode="numeric"><span class="unit">%</span></span></label>
         <p class="hint" id="tyreHint">Drive a few laps in practice and note how much the tyres dropped. You get new tyres at a stop when the current set would go below your lowest condition during the next stint.</p>
-        <label class="check wide"><input id="limitSets" type="checkbox"> <span>Limit the number of tyre sets</span></label>
-        <label class="f wide" hidden><span class="lab">Sets for the whole race</span>
-          <span class="in"><input id="tyreSets" type="number" min="1" step="1" value="4" inputmode="numeric"><span class="unit">sets, with the starting set</span></span></label>
+        <label class="check wide"><input id="limitTyres" type="checkbox"> <span>Limit the number of tyres</span></label>
+        <label class="f wide" hidden><span class="lab">Tyres for the whole race</span>
+          <span class="in"><input id="maxTyres" type="number" min="4" step="1" value="16" inputmode="numeric"><span class="unit">with the 4 you start on</span></span></label>
+        <p class="hint" id="limitHint" hidden>Tyres are changed 2 or 4 at a time. With too few tyres to stay above your lowest condition, the changes are spread evenly over the race.</p>
       </fieldset>
 
       <fieldset>
@@ -78,7 +79,9 @@
           <span class="in"><input id="lane" type="number" min="0" step="0.5" value="28" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Refuel rate</span>
           <span class="in"><input id="rate" type="number" min="0.1" step="0.1" value="2.5" inputmode="decimal"><span class="unit">L/s</span></span></label>
-        <label class="f"><span class="lab">Tyre change</span>
+        <label class="f"><span class="lab">Change 2 tyres</span>
+          <span class="in"><input id="tyre2" type="number" min="0" step="0.5" value="8" inputmode="decimal"><span class="unit">s</span></span></label>
+        <label class="f"><span class="lab">Change 4 tyres</span>
           <span class="in"><input id="tyre" type="number" min="0" step="0.5" value="12" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Driver swap</span>
           <span class="in"><input id="swap" type="number" min="0" step="0.5" value="8" inputmode="decimal"><span class="unit">s</span></span></label>

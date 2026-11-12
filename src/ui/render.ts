@@ -27,10 +27,21 @@ function renderTiles(r: Plan): string {
   const limit = r.stintLimitedBy === "tyres" ? "tyres" : "fuel";
   return '<div class="tiles">' +
     tile("Total laps", r.totalLaps, "finish at " + formatHms(r.finishSeconds)) +
-    tile("Pit stops", r.stops, r.tyreSetsUsed + (r.tyreSetsUsed === 1 ? " tyre set used" : " tyre sets used")) +
+    tile("Pit stops", r.stops, r.tyresUsed + " tyres used") +
     tile("Time in pits", formatMs(r.pitSecondsTotal), perStop) +
     tile("Full stint", r.fullStintLaps + " laps", "limited by " + limit) +
     "</div>";
+}
+
+function tyresText(changed: number): string {
+  if (changed === 4) return "4 new tyres";
+  if (changed === 2) return "2 new tyres (the most worn pair)";
+  return "keep tyres";
+}
+
+/** Tyre condition for display. Worn-out tyres cannot go below 0%. */
+function pct(condition: number): string {
+  return Math.max(0, condition).toFixed(0);
 }
 
 /** One line that describes a stint. Shown under the timeline when a stint is picked. */
@@ -40,7 +51,7 @@ export function stintInfo(s: Stint): string {
     formatHms(s.startSeconds) + " to " + formatHms(s.endSeconds) + " · ";
   if (s.stop) {
     html += "then box: add " + s.stop.fuelAdded.toFixed(1) + " L, " +
-      (s.stop.tyresChanged ? "new tyres" : "keep tyres") + ", " + s.stop.pitSeconds.toFixed(0) + " s";
+      tyresText(s.stop.tyresChanged) + ", " + s.stop.pitSeconds.toFixed(0) + " s";
   } else {
     html += "takes the finish";
   }
@@ -102,10 +113,12 @@ function renderTable(r: Plan): string {
   let rows = "";
   for (const s of r.stints) {
     const stop = s.stop;
-    // Worn-out tyres cannot go below 0%.
-    const left = Math.max(0, s.tyreAtEnd).toFixed(0);
-    const tyres = '<span class="tyre' + (s.tyreBelowMin ? " low" : "") + '"><span class="meter"><i style="width:' + left + '%"></i></span>' +
-      left + "%</span>";
+    // After a two-tyre change the two pairs have a different age. Show both, most worn first.
+    const worst = pct(s.tyresAtEnd[0]);
+    const best = pct(s.tyresAtEnd[1]);
+    const tyres = '<span class="tyre' + (s.tyreBelowMin ? " low" : "") + '"><span class="meter"><i style="width:' + worst + '%"></i></span>' +
+      worst + "%" + (best !== worst ? ' <span class="other">· ' + best + "%</span>" : "") + "</span>";
+    const changed = stop?.tyresChanged ?? 0;
     rows += '<tr data-stint="' + s.n + '"' + (s.final ? ' class="final"' : "") + ">" +
       cell("Stint", String(s.n)) +
       cell("Driver", '<i class="chip" style="background:' + colour(s.driverIndex) + '"></i>' + esc(s.driver), "l") +
@@ -116,7 +129,7 @@ function renderTable(r: Plan): string {
       cell("Fuel at start", s.fuelAtStart.toFixed(1) + " L") +
       cell("Tyres at end", tyres) +
       cell("Add fuel", stop ? stop.fuelAdded.toFixed(1) + " L" : '<span class="badge flag">Finish</span>') +
-      cell("Tyres", stop ? (stop.tyresChanged ? '<span class="badge new">New</span>' : '<span class="badge">Keep</span>') : "–") +
+      cell("Tyres", stop ? (changed ? '<span class="badge new">' + changed + " new</span>" : '<span class="badge">Keep</span>') : "–") +
       cell("Pit time", stop ? stop.pitSeconds.toFixed(0) + " s" : "–") +
       "</tr>";
   }
@@ -133,12 +146,11 @@ function renderTable(r: Plan): string {
 }
 
 function renderWarnings(r: Plan): string {
-  if (r.firstStintBelowMin === null) return "";
-  const sets = r.tyreSetsUsed === 1 ? "1 tyre set" : r.tyreSetsUsed + " tyre sets";
+  if (r.tyreStrategy !== "spread" || !r.stints.some((s) => s.tyreBelowMin)) return "";
   return renderMessage(
-    "Not enough tyre sets",
-    "With " + sets + " the tyres go below your lowest condition from stint " + r.firstStintBelowMin +
-      ". Those stints are marked in the stint sheet. Allow more sets or a lower condition, or accept the worn tyres.",
+    "Too few tyres to stay above your lowest condition",
+    "The " + r.tyresUsed + " tyres are spread as evenly as possible over the race. They go down to " + pct(r.lowestTyre) +
+      "% in stint " + r.lowestTyreStint + ". Stints below your lowest condition are marked in the stint sheet.",
   );
 }
 

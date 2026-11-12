@@ -5,8 +5,8 @@ import { DEFAULT_DRIVERS, driverBoxes, driverNames, setDriverBoxes } from "./dri
 // Reads and checks the form, shows errors next to the fields,
 // and saves and restores the form in the browser (localStorage).
 
-const TEXT_IDS = ["hours", "mins", "lapMin", "lapSec", "fuel", "tank", "startFuel", "margin", "wear", "wearLaps", "tyreMin", "tyreSets", "lane", "rate", "tyre", "swap"] as const;
-const CHECK_IDS = ["fullTank", "tyresOn", "limitSets", "together", "rotate"] as const;
+const TEXT_IDS = ["hours", "mins", "lapMin", "lapSec", "fuel", "tank", "startFuel", "margin", "wear", "wearLaps", "tyreMin", "maxTyres", "lane", "rate", "tyre2", "tyre", "swap"] as const;
+const CHECK_IDS = ["fullTank", "tyresOn", "limitTyres", "together", "rotate"] as const;
 const STORAGE_KEY = "stint-planner-v2";
 
 export type FieldId = (typeof TEXT_IDS)[number];
@@ -54,8 +54,10 @@ export function syncVisibility(): void {
   show("startFuel", !checked("fullTank"));
   show("wear", tyres);
   show("wearLaps", tyres);
-  show("limitSets", tyres);
-  show("tyreSets", tyres && checked("limitSets"));
+  show("limitTyres", tyres);
+  show("maxTyres", tyres && checked("limitTyres"));
+  show("limitHint", tyres && checked("limitTyres"));
+  show("tyre2", tyres);
   show("tyreMin", tyres);
   show("tyreHint", tyres);
   show("tyre", tyres);
@@ -117,16 +119,21 @@ export function readForm(): FormRead {
   // With tyre changes switched off, wear is 0: the calculation then never changes tyres.
   let tyreWearPerLap = 0;
   let tyreMinCondition = 0;
-  let tyreChangeSeconds = 0;
-  let maxTyreSets: number | null = null;
+  let tyreChange2Seconds = 0;
+  let tyreChange4Seconds = 0;
+  let maxTyres: number | null = null;
   if (checked("tyresOn")) {
     // Wear is typed as whole percent over a few laps, because that is what you can read in the game.
     // The calculation works with wear per lap.
     tyreWearPerLap = wholeNumber("wear", "the wear") / wholeNumber("wearLaps", "the laps");
-    if (checked("limitSets")) maxTyreSets = wholeNumber("tyreSets", "the number of sets");
+    if (checked("limitTyres")) {
+      maxTyres = wholeNumber("maxTyres", "the number of tyres");
+      if (!errors.maxTyres && maxTyres < 4) errors.maxTyres = "At least the 4 you start on.";
+    }
     tyreMinCondition = zeroOrMore("tyreMin");
     if (!errors.tyreMin && tyreMinCondition >= 100) errors.tyreMin = "Must be below 100.";
-    tyreChangeSeconds = zeroOrMore("tyre");
+    tyreChange2Seconds = zeroOrMore("tyre2");
+    tyreChange4Seconds = zeroOrMore("tyre");
   }
 
   const pitLaneLossSeconds = zeroOrMore("lane");
@@ -146,12 +153,13 @@ export function readForm(): FormRead {
       startFuelLitres,
       pitLaneLossSeconds,
       refuelRate,
-      tyreChangeSeconds,
+      tyreChange2Seconds,
+      tyreChange4Seconds,
       driverSwapSeconds,
       simultaneousService: checked("together"),
       tyreWearPerLap,
       tyreMinCondition,
-      maxTyreSets,
+      maxTyres,
       drivers: driverNames(),
       rotateDrivers: checked("rotate"),
     },
