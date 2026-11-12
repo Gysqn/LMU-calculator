@@ -3,26 +3,61 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Stint Planner</title>
+<title>Stint Planner for Le Mans Ultimate</title>
+<meta name="description" content="Plan fuel, tyres, pit stops and driver swaps for endurance races in Le Mans Ultimate. Free, runs in your browser.">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23d90429'/%3E%3Cpath d='M7 10h18M7 16h12M7 22h18' stroke='%23fff' stroke-width='3' stroke-linecap='round'/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;700;800&family=Barlow:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 </head>
-<body>
-<div class="wrap">
-  <header>
-    <div>
-      <h1>Stint Planner</h1>
-      <p>Fuel, tyres, pit stops and driver swaps for endurance races.</p>
+<body id="top">
+<header class="top">
+  <div class="wrap bar">
+    <a class="brand" href="#top">
+      <svg viewBox="0 0 32 32" width="28" height="28" aria-hidden="true"><rect width="32" height="32" rx="7" fill="var(--accent)"/><path d="M7 10h18M7 16h12M7 22h18" stroke="#fff" stroke-width="3" stroke-linecap="round"/></svg>
+      <span>Stint Planner</span>
+    </a>
+    <nav aria-label="Sections">
+      <a href="#planner">Planner</a>
+      <a href="#how">How it works</a>
+      <a href="#maths">The maths</a>
+      <a href="#faq">Questions</a>
+    </nav>
+    <button type="button" class="ghost small" id="theme">Theme: Auto</button>
+  </div>
+</header>
+
+<main>
+<section class="hero">
+  <div class="wrap">
+    <p class="eyebrow">Race strategy for Le Mans Ultimate</p>
+    <h1>Know every pit stop before the race starts</h1>
+    <p class="lead">Enter your lap time, fuel use and tyre wear from practice. You get a stint-by-stint plan: when to box, how much fuel to add, how many tyres to change and who drives next.</p>
+    <div class="cta">
+      <a class="btn primary" href="#planner">Start planning</a>
+      <a class="btn" href="#how">How it works</a>
     </div>
-    <div class="actions">
-      <button type="button" class="ghost" id="reset">Reset</button>
-      <button type="button" class="ghost" id="theme">Theme: Auto</button>
-    </div>
-  </header>
+    <ul class="points">
+      <li>Runs in your browser</li>
+      <li>Nothing to install</li>
+      <li>Your setup is saved on this device</li>
+    </ul>
+  </div>
+  <div class="stripe" aria-hidden="true"><i></i><b></b><i></i><b></b><i></i><b></b><i></i></div>
+</section>
+
+<section class="wrap block" id="planner">
+  <div class="sectionhead">
+    <h2>Planner</h2>
+    <p>Fill in your race on the left. The plan on the right updates while you type.</p>
+  </div>
 
   <div class="grid">
     <form class="panel" id="form" autocomplete="off" novalidate>
+      <div class="panelhead formhead">
+        <h3>Your race</h3>
+        <button type="button" class="ghost small" id="reset">Reset</button>
+      </div>
       <fieldset>
         <legend>Race</legend>
         <div class="chips wide" id="presets" role="group" aria-label="Race length presets">
@@ -79,14 +114,12 @@
           <span class="in"><input id="lane" type="number" min="0" step="0.5" value="28" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Refuel rate</span>
           <span class="in"><input id="rate" type="number" min="0.1" step="0.1" value="2.5" inputmode="decimal"><span class="unit">L/s</span></span></label>
-        <label class="f"><span class="lab">Change 2 tyres</span>
-          <span class="in"><input id="tyre2" type="number" min="0" step="0.5" value="8" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Change 4 tyres</span>
           <span class="in"><input id="tyre" type="number" min="0" step="0.5" value="12" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="f"><span class="lab">Driver swap</span>
           <span class="in"><input id="swap" type="number" min="0" step="0.5" value="8" inputmode="decimal"><span class="unit">s</span></span></label>
         <label class="check wide"><input id="together" type="checkbox" checked> <span>Refuel and change tyres at the same time</span></label>
-        <p class="hint" id="togetherHint">Ticked: the stop takes as long as the slower of the two. Unticked: their times are added up.</p>
+        <p class="hint" id="togetherHint">Ticked: the stop takes as long as the slower of the two. Unticked: their times are added up. Changing 2 tyres always takes 6 seconds.</p>
       </fieldset>
 
       <fieldset class="last">
@@ -101,7 +134,112 @@
 
     <div id="out" class="stack" aria-live="polite"></div>
   </div>
-</div>
+</section>
+
+<section class="band" id="how">
+  <div class="wrap block">
+    <div class="sectionhead">
+      <h2>How it works</h2>
+      <p>Three steps from a practice session to a race plan.</p>
+    </div>
+    <ol class="steps">
+      <li>
+        <span class="num">1</span>
+        <h3>Measure in practice</h3>
+        <p>Drive a few clean laps on race fuel. Note your average lap time, the fuel you used per lap, and how many percent the tyres lost over those laps.</p>
+      </li>
+      <li>
+        <span class="num">2</span>
+        <h3>Enter your race</h3>
+        <p>Fill in the race length, tank size, pit stop times and your drivers. Fields that do not apply to your race hide themselves.</p>
+      </li>
+      <li>
+        <span class="num">3</span>
+        <h3>Race to the plan</h3>
+        <p>The stint sheet tells you when to box, how much fuel to add, how many tyres to change and who gets in. Copy it and share it with your team.</p>
+      </li>
+    </ol>
+  </div>
+</section>
+
+<section class="wrap block" id="maths">
+  <div class="sectionhead">
+    <h2>The maths</h2>
+    <p>No hidden tricks. This is everything the planner does with your numbers.</p>
+  </div>
+  <div class="cards">
+    <article class="panel">
+      <h3>Stint length</h3>
+      <p>A stint is as long as the fuel allows: tank size divided by fuel per lap, minus your safety margin, rounded down.</p>
+      <p class="example">90 L ÷ 3.6 L = 25 laps<br>25 − 1 lap margin = <strong>24 laps</strong></p>
+    </article>
+    <article class="panel">
+      <h3>Pit stop time</h3>
+      <p>Pit lane loss plus the time you stand still. Standing still is refuelling and the tyre change, together or one after the other, plus a driver swap.</p>
+      <p class="example">86.4 L ÷ 2.5 L/s = 34.6 s refuelling<br>28 s lane + 34.6 s + 8 s swap = <strong>71 s</strong></p>
+    </article>
+    <article class="panel">
+      <h3>Tyres</h3>
+      <p>Tyres lose the same percentage every lap. A stop changes 2 or 4 tyres. A pair gets changed when it would drop below your lowest condition during the next stint.</p>
+      <p class="example">6% in 3 laps = 2% per lap<br>24 laps = 48% worn, <strong>52% left</strong></p>
+    </article>
+    <article class="panel">
+      <h3>A limited number of tyres</h3>
+      <p>With enough tyres you never go below your lowest condition. With too few, the changes are spread over the race so the longest run on one pair is as short as possible.</p>
+      <p class="example">The plan tells you how low the tyres go, and in which stint.</p>
+    </article>
+    <article class="panel">
+      <h3>The finish</h3>
+      <p>The race ends on the first lap that finishes after the clock reaches zero. The last stop only adds the fuel you need to get there, so it is shorter.</p>
+      <p class="example">6 h race, last lap ends at <strong>6:01:12</strong></p>
+    </article>
+    <article class="panel">
+      <h3>What is left out</h3>
+      <p>Traffic, safety cars, weather, damage and slower laps on worn tyres are not in the model. Keep a safety margin and adjust during the race.</p>
+      <p class="example">The plan is a starting point, not a promise.</p>
+    </article>
+  </div>
+</section>
+
+<section class="band" id="faq">
+  <div class="wrap block narrow">
+    <div class="sectionhead">
+      <h2>Questions</h2>
+    </div>
+    <details>
+      <summary>Where is my data stored?</summary>
+      <p>In this browser, on this device. Nothing is sent anywhere, and there is no account. If you clear your browser's site data, your setup is gone.</p>
+    </details>
+    <details>
+      <summary>Why does the plan keep fuel in the tank?</summary>
+      <p>That is your safety margin. Fuel use changes with traffic, slipstream and driving style. One lap of margin means a slightly thirsty stint does not leave you stranded on the last lap.</p>
+    </details>
+    <details>
+      <summary>Why does a stop sometimes change only 2 tyres?</summary>
+      <p>This happens when you set a tyre limit that is too low to change all four every time. The planner then changes the most worn pair, so the tyres you have last the whole race as evenly as possible.</p>
+    </details>
+    <details>
+      <summary>Why is the last stint shorter than the others?</summary>
+      <p>The race ends on time, not on a number of laps. The last stint only runs until the first lap that finishes after the clock reaches zero, and it only takes the fuel for those laps.</p>
+    </details>
+    <details>
+      <summary>My numbers in the race are different. What now?</summary>
+      <p>Change the inputs and the plan updates straight away. A mode that re-plans from the current lap during the race is planned for a later version.</p>
+    </details>
+    <details>
+      <summary>Is this an official tool?</summary>
+      <p>No. It is a fan-made planner and is not affiliated with or endorsed by the makers of Le Mans Ultimate.</p>
+    </details>
+  </div>
+</section>
+</main>
+
+<footer class="foot">
+  <div class="wrap">
+    <p><strong>Stint Planner</strong> · An unofficial, fan-made tool. Not affiliated with or endorsed by the makers of Le Mans Ultimate.</p>
+    <p>All results are estimates based on the numbers you enter. Check them in practice before you rely on them in a race.</p>
+  </div>
+</footer>
 <a href="#out" class="jump" id="jump" hidden></a>
 <script type="module" src="/src/main.ts"></script>
 </body>

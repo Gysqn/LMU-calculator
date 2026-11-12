@@ -5,9 +5,12 @@ import { DEFAULT_DRIVERS, driverBoxes, driverNames, setDriverBoxes } from "./dri
 // Reads and checks the form, shows errors next to the fields,
 // and saves and restores the form in the browser (localStorage).
 
-const TEXT_IDS = ["hours", "mins", "lapMin", "lapSec", "fuel", "tank", "startFuel", "margin", "wear", "wearLaps", "tyreMin", "maxTyres", "lane", "rate", "tyre2", "tyre", "swap"] as const;
+const TEXT_IDS = ["hours", "mins", "lapMin", "lapSec", "fuel", "tank", "startFuel", "margin", "wear", "wearLaps", "tyreMin", "maxTyres", "lane", "rate", "tyre", "swap"] as const;
 const CHECK_IDS = ["fullTank", "tyresOn", "limitTyres", "together", "rotate"] as const;
 const STORAGE_KEY = "stint-planner-v2";
+
+// Changing two tyres always takes 6 seconds in Le Mans Ultimate (told by the user), so it is not a form field.
+const CHANGE_2_TYRES_SECONDS = 6;
 
 export type FieldId = (typeof TEXT_IDS)[number];
 export type FieldErrors = Partial<Record<FieldId, string>>;
@@ -57,7 +60,6 @@ export function syncVisibility(): void {
   show("limitTyres", tyres);
   show("maxTyres", tyres && checked("limitTyres"));
   show("limitHint", tyres && checked("limitTyres"));
-  show("tyre2", tyres);
   show("tyreMin", tyres);
   show("tyreHint", tyres);
   show("tyre", tyres);
@@ -132,7 +134,7 @@ export function readForm(): FormRead {
     }
     tyreMinCondition = zeroOrMore("tyreMin");
     if (!errors.tyreMin && tyreMinCondition >= 100) errors.tyreMin = "Must be below 100.";
-    tyreChange2Seconds = zeroOrMore("tyre2");
+    tyreChange2Seconds = CHANGE_2_TYRES_SECONDS;
     tyreChange4Seconds = zeroOrMore("tyre");
   }
 

@@ -83,7 +83,7 @@ function renderTimeline(r: Plan): string {
       segs += '<div class="pit" style="flex:' + ((s.stop.pitSeconds / total) * 100).toFixed(3) + ' 1 0"></div>';
     }
   }
-  return '<div class="panel"><h2>Race timeline</h2>' +
+  return '<div class="panel"><h3>Race timeline</h3>' +
     '<div class="timeline">' + segs + "</div>" +
     '<div class="axis" aria-hidden="true">' + axisTicks(total) + "</div>" +
     '<p class="info" id="info">Tap or hover a stint to see its details. Striped blocks are pit stops.</p></div>';
@@ -101,7 +101,7 @@ function renderDrivers(r: Plan): string {
       '<span class="time">' + formatHms(d.seconds) + "</span>" +
       '<span class="count">' + share.toFixed(0) + "% · " + stints + (stints === 1 ? " stint" : " stints") + "</span></div>";
   }
-  return '<div class="panel"><h2>Time at the wheel</h2><div class="drivers">' + rows + "</div></div>";
+  return '<div class="panel"><h3>Time at the wheel</h3><div class="drivers">' + rows + "</div></div>";
 }
 
 function cell(label: string, html: string, cls = ""): string {
@@ -133,7 +133,7 @@ function renderTable(r: Plan): string {
       cell("Pit time", stop ? stop.pitSeconds.toFixed(0) + " s" : "–") +
       "</tr>";
   }
-  return '<div class="panel"><div class="panelhead"><h2>Stint sheet</h2>' +
+  return '<div class="panel"><div class="panelhead"><h3>Stint sheet</h3>' +
     '<div class="row"><span id="copied" class="note" role="status"></span><button type="button" id="copy">Copy plan</button></div></div>' +
     '<div class="tablewrap"><table class="sheet"><thead>' +
     '<tr class="groups"><th colspan="8"></th><th colspan="3">At the stop after this stint</th></tr><tr>' +
