@@ -18,6 +18,7 @@ function input(overrides: Partial<PlanInput> = {}): PlanInput {
     simultaneousService: true,
     tyreWearPerLap: 0,
     tyreMinCondition: 50,
+    maxTyreSets: null,
     drivers: ["Alex", "Sam", "Kim"],
     rotateDrivers: true,
     ...overrides,
@@ -258,6 +259,57 @@ describe("planRace: tyres", () => {
     const b = sequential.stints[0]?.stop;
     expect(a?.stationarySeconds).toBeCloseTo(34.56 + 8, 6); // refuel is longer than the tyre change
     expect(b?.stationarySeconds).toBeCloseTo(34.56 + 12 + 8, 6);
+  });
+});
+
+describe("planRace: limited tyre sets", () => {
+  // 2% per lap, minimum 50%: without a limit this race changes tyres at all 4 stops (5 sets).
+  const wearing = { tyreWearPerLap: 2, tyreMinCondition: 50 };
+
+  it("uses 5 sets without a limit", () => {
+    const r = ok(input(wearing));
+    expect(r.tyreSetsUsed).toBe(5);
+    expect(r.firstStintBelowMin).toBeNull();
+  });
+
+  it("changes nothing when the limit is not reached", () => {
+    const free = ok(input(wearing));
+    const limited = ok(input({ ...wearing, maxTyreSets: 5 }));
+    expect(limited.stints).toEqual(free.stints);
+  });
+
+  it("stops changing tyres when the sets run out", () => {
+    const r = ok(input({ ...wearing, maxTyreSets: 3 }));
+    expect(r.stints.map((s) => s.stop?.tyresChanged ?? null)).toEqual([true, true, false, false, null]);
+    expect(r.tyreSetsUsed).toBe(3);
+    // Stint 3 starts on the last new set. Stint 4 is the first on tyres that are too worn.
+    expect(r.stints[2]?.tyreBelowMin).toBe(false);
+    expect(r.stints[3]?.tyreBelowMin).toBe(true);
+    expect(r.firstStintBelowMin).toBe(4);
+  });
+
+  it("never changes tyres with a single set", () => {
+    const r = ok(input({ ...wearing, maxTyreSets: 1 }));
+    expect(r.tyreChanges).toBe(0);
+    expect(r.tyreSetsUsed).toBe(1);
+    expect(r.firstStintBelowMin).toBe(2);
+  });
+
+  it("skips the tyre change time when there is no new set", () => {
+    const r = ok(input({ ...wearing, maxTyreSets: 1, simultaneousService: false }));
+    // Refuel 34.56 s plus the swap, without the 12 s tyre change.
+    expect(r.stints[0]?.stop?.stationarySeconds).toBeCloseTo(34.56 + 8, 6);
+  });
+
+  it("goes back to fuel-length stints when tyre-limited stints run out of sets", () => {
+    // 5% per lap: a set lasts 10 laps. With 2 sets, stints 1 and 2 are 10 laps, then fuel decides.
+    const r = ok(input({ tyreWearPerLap: 5, tyreMinCondition: 50, maxTyreSets: 2 }));
+    expect(r.stints.slice(0, 3).map((s) => s.laps)).toEqual([10, 10, 24]);
+  });
+
+  it("rejects a number of sets that is not a whole number of at least 1", () => {
+    expect(planRace(input({ maxTyreSets: 0 })).ok).toBe(false);
+    expect(planRace(input({ maxTyreSets: 2.5 })).ok).toBe(false);
   });
 });
 

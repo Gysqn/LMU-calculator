@@ -25,6 +25,11 @@ export interface PlanInput {
   tyreWearPerLap: number;
   /** Lowest tyre condition (percent) the user is willing to drive on. */
   tyreMinCondition: number;
+  /**
+   * Sets of tyres you may use in the whole race, counting the set you start on.
+   * null means no limit. When the sets run out, the car stays on its old tyres.
+   */
+  maxTyreSets: number | null;
 
   drivers: string[];
   /** Change driver at every stop (only has an effect with more than one driver). */
@@ -56,6 +61,8 @@ export interface Stint {
   fuelAtEnd: number;
   tyreAtStart: number;
   tyreAtEnd: number;
+  /** true when the tyres end this stint under the minimum, because no new sets were left. */
+  tyreBelowMin: boolean;
   /** true for the stint that takes the chequered flag. */
   final: boolean;
   /** The stop after this stint. null for the final stint. */
@@ -78,6 +85,10 @@ export interface Plan {
   totalLaps: number;
   stops: number;
   tyreChanges: number;
+  /** Sets of tyres used, counting the set the car starts on. */
+  tyreSetsUsed: number;
+  /** First stint that ends under the minimum tyre condition, or null when none does. */
+  firstStintBelowMin: number | null;
   pitSecondsTotal: number;
   /** Race clock when the car crosses the finish line. */
   finishSeconds: number;

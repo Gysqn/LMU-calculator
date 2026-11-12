@@ -1,7 +1,8 @@
 import "./style.css";
 import { planRace } from "./calc/plan";
 import type { Plan } from "./calc/types";
-import { raceLengthMinutes, readForm, resetForm, restoreForm, saveForm, setRaceLength, showErrors } from "./ui/form";
+import { initDrivers } from "./ui/drivers";
+import { raceLengthMinutes, readForm, resetForm, restoreForm, saveForm, setRaceLength, showErrors, syncVisibility } from "./ui/form";
 import { planText } from "./ui/planText";
 import { renderMessage, renderPlan, stintInfo } from "./ui/render";
 import { initTheme } from "./ui/theme";
@@ -24,6 +25,7 @@ let lastPlan: Plan | null = null;
 function update(): void {
   saveForm();
   markPreset();
+  syncVisibility();
   const read = readForm();
   showErrors(read.errors);
   lastPlan = null;
@@ -111,6 +113,8 @@ function initReset(button: HTMLButtonElement): void {
   });
 }
 
+// The driver boxes must exist before the saved names are put back into them.
+initDrivers(element("driverList"), element("addDriver"), update);
 restoreForm();
 initTheme(element("theme"));
 initReset(element<HTMLButtonElement>("reset"));

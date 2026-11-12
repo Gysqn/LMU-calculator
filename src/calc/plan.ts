@@ -68,6 +68,9 @@ function validate(c: PlanInput): string | null {
   if (!isNumber(c.tyreMinCondition) || c.tyreMinCondition < 0 || c.tyreMinCondition >= 100) {
     return "The minimum tyre condition must be between 0 and 99 percent.";
   }
+  if (c.maxTyreSets !== null && (!Number.isInteger(c.maxTyreSets) || c.maxTyreSets < 1)) {
+    return "The number of tyre sets must be a whole number of at least 1.";
+  }
   return null;
 }
 
@@ -101,6 +104,8 @@ export function planRace(c: PlanInput): PlanResult {
   let lapNo = 0;
   let fuel = c.startFuelLitres;
   let lapsOnTyres = 0;
+  // New sets still in the garage. The car starts on one set, so that one is already gone.
+  let setsLeft = c.maxTyreSets === null ? Infinity : c.maxTyreSets - 1;
   // Laps the car is fuelled and "tyred" for in the coming stint.
   let plannedLaps = Math.min(firstFuelLaps, tyreLaps);
 
@@ -116,6 +121,7 @@ export function planRace(c: PlanInput): PlanResult {
     const end = clock + laps * c.lapSeconds;
     const fuelAtEnd = fuel - laps * c.fuelPerLap;
     lapsOnTyres += laps;
+    const tyreAtEnd = 100 - c.tyreWearPerLap * lapsOnTyres;
 
     const stint: Stint = {
       n: i + 1,
@@ -129,7 +135,8 @@ export function planRace(c: PlanInput): PlanResult {
       fuelAtStart: fuel,
       fuelAtEnd,
       tyreAtStart,
-      tyreAtEnd: 100 - c.tyreWearPerLap * lapsOnTyres,
+      tyreAtEnd,
+      tyreBelowMin: c.tyreWearPerLap > 0 && tyreAtEnd < c.tyreMinCondition - EPS,
       final,
       stop: null,
     };
@@ -142,8 +149,9 @@ export function planRace(c: PlanInput): PlanResult {
       const target = Math.min(c.tankLitres, (n + c.marginLaps) * c.fuelPerLap);
       let fuelAdded = target - fuelAtEnd;
       if (fuelAdded < EPS) fuelAdded = 0;
-      // Change tyres when the current set would drop below the minimum during the next stint.
-      const tyresChanged = 100 - c.tyreWearPerLap * (lapsOnTyres + n) < c.tyreMinCondition - EPS;
+      // Change tyres when the current set would drop below the minimum during the next stint,
+      // as long as there is a new set left.
+      const tyresChanged = setsLeft > 0 && 100 - c.tyreWearPerLap * (lapsOnTyres + n) < c.tyreMinCondition - EPS;
       const stationary = stationarySeconds(
         fuelAdded / c.refuelRate,
         tyresChanged ? c.tyreChangeSeconds : 0,
@@ -156,9 +164,11 @@ export function planRace(c: PlanInput): PlanResult {
     // A shorter stop leaves more race time, which can mean one more lap to drive.
     // So look for the smallest next stint that still reaches the finish with its own stop time.
     // If there is none, the next stint is a normal full stint.
-    let nextLaps = fullStintLaps;
-    let stop = stopFor(fullStintLaps);
-    for (let n = 1; n < fullStintLaps; n++) {
+    // Without a new set to fit, tyre life no longer shortens the stint: only fuel does.
+    const longest = setsLeft > 0 ? fullStintLaps : tankLaps;
+    let nextLaps = longest;
+    let stop = stopFor(longest);
+    for (let n = 1; n < longest; n++) {
       const candidate = stopFor(n);
       const lapsAfterStop = lapsToFinish(c.raceSeconds - end - candidate.pitSeconds, c.lapSeconds);
       if (lapsAfterStop <= n) {
@@ -171,7 +181,10 @@ export function planRace(c: PlanInput): PlanResult {
     stint.stop = stop;
     clock = end + stop.pitSeconds;
     fuel = fuelAtEnd + stop.fuelAdded;
-    if (stop.tyresChanged) lapsOnTyres = 0;
+    if (stop.tyresChanged) {
+      lapsOnTyres = 0;
+      setsLeft--;
+    }
     plannedLaps = nextLaps;
   }
 
@@ -197,6 +210,8 @@ export function planRace(c: PlanInput): PlanResult {
     totalLaps: lapNo,
     stops: stints.length - 1,
     tyreChanges,
+    tyreSetsUsed: tyreChanges + 1,
+    firstStintBelowMin: stints.find((s) => s.tyreBelowMin)?.n ?? null,
     pitSecondsTotal,
     finishSeconds: last ? last.endSeconds : 0,
     drivers,

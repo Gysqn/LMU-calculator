@@ -27,7 +27,7 @@ function renderTiles(r: Plan): string {
   const limit = r.stintLimitedBy === "tyres" ? "tyres" : "fuel";
   return '<div class="tiles">' +
     tile("Total laps", r.totalLaps, "finish at " + formatHms(r.finishSeconds)) +
-    tile("Pit stops", r.stops, r.tyreChanges + " with new tyres") +
+    tile("Pit stops", r.stops, r.tyreSetsUsed + (r.tyreSetsUsed === 1 ? " tyre set used" : " tyre sets used")) +
     tile("Time in pits", formatMs(r.pitSecondsTotal), perStop) +
     tile("Full stint", r.fullStintLaps + " laps", "limited by " + limit) +
     "</div>";
@@ -102,8 +102,10 @@ function renderTable(r: Plan): string {
   let rows = "";
   for (const s of r.stints) {
     const stop = s.stop;
-    const tyres = '<span class="tyre"><span class="meter"><i style="width:' + Math.max(0, s.tyreAtEnd).toFixed(0) + '%"></i></span>' +
-      s.tyreAtEnd.toFixed(0) + "%</span>";
+    // Worn-out tyres cannot go below 0%.
+    const left = Math.max(0, s.tyreAtEnd).toFixed(0);
+    const tyres = '<span class="tyre' + (s.tyreBelowMin ? " low" : "") + '"><span class="meter"><i style="width:' + left + '%"></i></span>' +
+      left + "%</span>";
     rows += '<tr data-stint="' + s.n + '"' + (s.final ? ' class="final"' : "") + ">" +
       cell("Stint", String(s.n)) +
       cell("Driver", '<i class="chip" style="background:' + colour(s.driverIndex) + '"></i>' + esc(s.driver), "l") +
@@ -130,6 +132,16 @@ function renderTable(r: Plan): string {
     "Tyre wear is a straight line and lap times stay the same on worn tyres. Traffic and safety cars are not modelled, so keep your margin.</p></div>";
 }
 
+function renderWarnings(r: Plan): string {
+  if (r.firstStintBelowMin === null) return "";
+  const sets = r.tyreSetsUsed === 1 ? "1 tyre set" : r.tyreSetsUsed + " tyre sets";
+  return renderMessage(
+    "Not enough tyre sets",
+    "With " + sets + " the tyres go below your lowest condition from stint " + r.firstStintBelowMin +
+      ". Those stints are marked in the stint sheet. Allow more sets or a lower condition, or accept the worn tyres.",
+  );
+}
+
 export function renderPlan(r: Plan): string {
-  return renderTiles(r) + renderTimeline(r) + renderDrivers(r) + renderTable(r);
+  return renderWarnings(r) + renderTiles(r) + renderTimeline(r) + renderDrivers(r) + renderTable(r);
 }

@@ -1,11 +1,12 @@
 import { parseLapTime } from "../calc/time";
 import type { PlanInput } from "../calc/types";
+import { DEFAULT_DRIVERS, driverBoxes, driverNames, setDriverBoxes } from "./drivers";
 
 // Reads and checks the form, shows errors next to the fields,
 // and saves and restores the form in the browser (localStorage).
 
-const TEXT_IDS = ["hours", "mins", "lap", "fuel", "tank", "startFuel", "margin", "wear", "tyreMin", "lane", "rate", "tyre", "swap", "drivers"] as const;
-const CHECK_IDS = ["together", "rotate"] as const;
+const TEXT_IDS = ["hours", "mins", "lapMin", "lapSec", "fuel", "tank", "startFuel", "margin", "wear", "wearLaps", "tyreMin", "tyreSets", "lane", "rate", "tyre", "swap"] as const;
+const CHECK_IDS = ["fullTank", "tyresOn", "limitSets", "together", "rotate"] as const;
 const STORAGE_KEY = "stint-planner-v2";
 
 export type FieldId = (typeof TEXT_IDS)[number];
@@ -23,6 +24,10 @@ function field(id: string): HTMLInputElement {
   return el;
 }
 
+function checked(id: (typeof CHECK_IDS)[number]): boolean {
+  return field(id).checked;
+}
+
 /** Number from a field. Empty or invalid text gives NaN. */
 function num(id: FieldId): number {
   return parseFloat(field(id).value.replace(",", "."));
@@ -30,6 +35,34 @@ function num(id: FieldId): number {
 
 function isEmpty(id: FieldId): boolean {
   return field(id).value.trim() === "";
+}
+
+/** Show or hide a field together with its label. */
+function show(id: string, visible: boolean): void {
+  const el = document.getElementById(id);
+  const target = el instanceof HTMLInputElement ? el.closest("label") : el;
+  if (target instanceof HTMLElement) target.hidden = !visible;
+}
+
+function isSwapping(): boolean {
+  return driverBoxes().length > 1 && checked("rotate");
+}
+
+/** Only show the fields that matter for the current choices. */
+export function syncVisibility(): void {
+  const tyres = checked("tyresOn");
+  show("startFuel", !checked("fullTank"));
+  show("wear", tyres);
+  show("wearLaps", tyres);
+  show("limitSets", tyres);
+  show("tyreSets", tyres && checked("limitSets"));
+  show("tyreMin", tyres);
+  show("tyreHint", tyres);
+  show("tyre", tyres);
+  show("together", tyres);
+  show("togetherHint", tyres);
+  show("rotate", driverBoxes().length > 1);
+  show("swap", isSwapping());
 }
 
 export function readForm(): FormRead {
@@ -49,34 +82,58 @@ export function readForm(): FormRead {
     return n;
   };
 
-  const hours = zeroOrMore("hours");
-  const mins = zeroOrMore("mins");
-  const raceSeconds = hours * 3600 + mins * 60;
+  // A required whole number of at least 1, such as a number of laps.
+  const wholeNumber = (id: FieldId, what: string): number => {
+    const text = field(id).value.trim();
+    const n = Number(text);
+    if (text === "") errors[id] = "Enter " + what + ".";
+    else if (!Number.isInteger(n)) errors[id] = "Use a whole number.";
+    else if (n < 1) errors[id] = "Must be at least 1.";
+    return n;
+  };
+
+  const raceSeconds = zeroOrMore("hours") * 3600 + zeroOrMore("mins") * 60;
   if (!errors.hours && !errors.mins && !(raceSeconds > 0)) errors.hours = "Enter a race length.";
 
-  const lapSeconds = parseLapTime(field("lap").value);
-  // Under 20 seconds is almost certainly a half-typed lap time, not a real one.
-  if (lapSeconds === null || lapSeconds < 20) errors.lap = "Use minutes:seconds, like 3:32.0.";
+  const lapMin = zeroOrMore("lapMin");
+  const lapSec = zeroOrMore("lapSec");
+  const lapSeconds = lapMin * 60 + lapSec;
+  if (!errors.lapMin && !errors.lapSec) {
+    if (lapSec >= 60) errors.lapSec = "Must be below 60.";
+    else if (lapSeconds === 0) errors.lapMin = "Enter a lap time.";
+    // Under 20 seconds is almost certainly a half-typed lap time, not a real one.
+    else if (lapSeconds < 20) errors.lapSec = "That lap is too short.";
+  }
 
   const fuelPerLap = positive("fuel", "the fuel use");
   const tankLitres = positive("tank", "the tank size");
-  // An empty start fuel field means a full tank.
   let startFuelLitres = tankLitres;
-  if (!isEmpty("startFuel")) {
-    startFuelLitres = num("startFuel");
-    if (!(startFuelLitres > 0)) errors.startFuel = "Must be more than 0.";
-    else if (tankLitres > 0 && startFuelLitres > tankLitres) errors.startFuel = "More than the tank holds.";
+  if (!checked("fullTank")) {
+    startFuelLitres = positive("startFuel", "the start fuel");
+    if (startFuelLitres > 0 && tankLitres > 0 && startFuelLitres > tankLitres) errors.startFuel = "More than the tank holds.";
   }
   const marginLaps = zeroOrMore("margin");
-  const tyreWearPerLap = zeroOrMore("wear");
-  const tyreMinCondition = zeroOrMore("tyreMin");
-  if (!errors.tyreMin && tyreMinCondition >= 100) errors.tyreMin = "Must be below 100.";
+
+  // With tyre changes switched off, wear is 0: the calculation then never changes tyres.
+  let tyreWearPerLap = 0;
+  let tyreMinCondition = 0;
+  let tyreChangeSeconds = 0;
+  let maxTyreSets: number | null = null;
+  if (checked("tyresOn")) {
+    // Wear is typed as whole percent over a few laps, because that is what you can read in the game.
+    // The calculation works with wear per lap.
+    tyreWearPerLap = wholeNumber("wear", "the wear") / wholeNumber("wearLaps", "the laps");
+    if (checked("limitSets")) maxTyreSets = wholeNumber("tyreSets", "the number of sets");
+    tyreMinCondition = zeroOrMore("tyreMin");
+    if (!errors.tyreMin && tyreMinCondition >= 100) errors.tyreMin = "Must be below 100.";
+    tyreChangeSeconds = zeroOrMore("tyre");
+  }
+
   const pitLaneLossSeconds = zeroOrMore("lane");
   const refuelRate = positive("rate", "the refuel rate");
-  const tyreChangeSeconds = zeroOrMore("tyre");
-  const driverSwapSeconds = zeroOrMore("swap");
+  const driverSwapSeconds = isSwapping() ? zeroOrMore("swap") : 0;
 
-  if (Object.keys(errors).length > 0 || lapSeconds === null) return { input: null, errors };
+  if (Object.keys(errors).length > 0) return { input: null, errors };
 
   return {
     errors,
@@ -91,11 +148,12 @@ export function readForm(): FormRead {
       refuelRate,
       tyreChangeSeconds,
       driverSwapSeconds,
-      simultaneousService: field("together").checked,
+      simultaneousService: checked("together"),
       tyreWearPerLap,
       tyreMinCondition,
-      drivers: field("drivers").value.split(",").map((d) => d.trim()).filter(Boolean),
-      rotateDrivers: field("rotate").checked,
+      maxTyreSets,
+      drivers: driverNames(),
+      rotateDrivers: checked("rotate"),
     },
   };
 }
@@ -130,9 +188,10 @@ export function showErrors(errors: FieldErrors): void {
 
 export function saveForm(): void {
   try {
-    const data: Record<string, string | boolean> = {};
+    const data: Record<string, string | boolean | string[]> = {};
     for (const id of TEXT_IDS) data[id] = field(id).value;
-    for (const id of CHECK_IDS) data[id] = field(id).checked;
+    for (const id of CHECK_IDS) data[id] = checked(id);
+    data.drivers = driverBoxes();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
   } catch {
     // Storage can be blocked (private window). The app still works, it just forgets.
@@ -152,6 +211,28 @@ export function restoreForm(): void {
       const v = data[id];
       if (typeof v === "boolean") field(id).checked = v;
     }
+
+    // Data saved by an earlier version of the app looked a little different.
+    if (typeof data.lap === "string" && data.lapMin === undefined) {
+      const seconds = parseLapTime(data.lap);
+      if (seconds !== null) {
+        const minutes = Math.floor(seconds / 60);
+        field("lapMin").value = String(minutes);
+        field("lapSec").value = String(Math.round((seconds - minutes * 60) * 1000) / 1000);
+      }
+    }
+    if (typeof data.wear === "string" && data.wearLaps === undefined) {
+      // Wear used to be saved per lap. It is now whole percent over 3 laps.
+      const perLap = parseFloat(data.wear);
+      if (perLap > 0) field("wear").value = String(Math.max(1, Math.round(perLap * 3)));
+      else field("tyresOn").checked = false;
+    }
+    if (data.fullTank === undefined) field("fullTank").checked = field("startFuel").value.trim() === "";
+    if (Array.isArray(data.drivers)) {
+      setDriverBoxes(data.drivers.filter((d): d is string => typeof d === "string"));
+    } else if (typeof data.drivers === "string") {
+      setDriverBoxes(data.drivers.split(",").map((d) => d.trim()).filter(Boolean));
+    }
   } catch {
     // Unreadable saved data: keep the defaults.
   }
@@ -161,6 +242,7 @@ export function restoreForm(): void {
 export function resetForm(): void {
   for (const id of TEXT_IDS) field(id).value = field(id).defaultValue;
   for (const id of CHECK_IDS) field(id).checked = field(id).defaultChecked;
+  setDriverBoxes(DEFAULT_DRIVERS);
 }
 
 /** Set the race length fields, used by the preset buttons. */

@@ -17,6 +17,7 @@ const input: PlanInput = {
   simultaneousService: true,
   tyreWearPerLap: 1,
   tyreMinCondition: 50,
+  maxTyreSets: null,
   drivers: ["Alex", "Sam"],
   rotateDrivers: true,
 };
