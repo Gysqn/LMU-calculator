@@ -285,14 +285,25 @@ export function showErrors(errors: FieldErrors): void {
   }
 }
 
+/** Everything in the form, as plain data that can be stored. */
+export type FormData = Record<string, string | boolean | string[]>;
+
+// The "During the race" fields describe one moment, so they do not belong in a saved setup.
+const LIVE_IDS: readonly string[] = ["modeLive", "boxNow", "leftH", "leftM", "leftS", "lapsDone", "fuelNow", "tyreNow", "tyresUsedNow"];
+
+/** Read the whole form. Pass false to leave out the "During the race" fields. */
+export function collectForm(withLive = true): FormData {
+  const data: FormData = {};
+  for (const id of TEXT_IDS) if (withLive || !LIVE_IDS.includes(id)) data[id] = field(id).value;
+  for (const id of CHECK_IDS) if (withLive || !LIVE_IDS.includes(id)) data[id] = checked(id);
+  data.drivers = driverBoxes();
+  if (withLive) data.driverNow = String(driverSelect().selectedIndex);
+  return data;
+}
+
 export function saveForm(): void {
   try {
-    const data: Record<string, string | boolean | string[]> = {};
-    for (const id of TEXT_IDS) data[id] = field(id).value;
-    for (const id of CHECK_IDS) data[id] = checked(id);
-    data.drivers = driverBoxes();
-    data.driverNow = String(driverSelect().selectedIndex);
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(collectForm()));
   } catch {
     // Storage can be blocked (private window). The app still works, it just forgets.
   }
@@ -300,7 +311,15 @@ export function saveForm(): void {
 
 export function restoreForm(): void {
   try {
-    const saved: unknown = JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null");
+    applyForm(JSON.parse(localStorage.getItem(STORAGE_KEY) ?? "null"));
+  } catch {
+    // Unreadable saved data: keep the defaults.
+  }
+}
+
+/** Put stored data back into the form. Fields that are not in the data keep their value. */
+export function applyForm(saved: unknown): void {
+  try {
     if (typeof saved !== "object" || saved === null) return;
     const data = saved as Record<string, unknown>;
     for (const id of TEXT_IDS) {

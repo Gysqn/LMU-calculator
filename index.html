@@ -59,6 +59,17 @@
         <button type="button" class="ghost small" id="reset">Reset</button>
       </div>
 
+      <div class="setups">
+        <label class="f"><span class="lab">Saved setups</span>
+          <span class="in"><select id="setupPick" aria-label="Load a saved setup"></select></span></label>
+        <div class="setuprow">
+          <span class="in"><input id="setupName" type="text" placeholder="Name, e.g. car and track" aria-label="Name for this setup" maxlength="60"></span>
+          <button type="button" class="small" id="setupSave">Save</button>
+          <button type="button" class="ghost small" id="setupDelete">Delete</button>
+        </div>
+        <small class="setupmsg" id="setupMsg" role="status"></small>
+      </div>
+
       <div class="mode" role="radiogroup" aria-label="When are you planning?">
         <label><input type="radio" name="mode" id="modePre" checked><span>Before the race</span></label>
         <label><input type="radio" name="mode" id="modeLive"><span>During the race</span></label>

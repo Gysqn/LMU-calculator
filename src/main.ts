@@ -5,6 +5,7 @@ import { initDrivers } from "./ui/drivers";
 import { prefillLive, raceLengthMinutes, readForm, resetForm, restoreForm, saveForm, setRaceLength, showErrors, syncVisibility } from "./ui/form";
 import { planText } from "./ui/planText";
 import { renderMessage, renderPlan, stintInfo } from "./ui/render";
+import { initSetups } from "./ui/setups";
 import { initTheme } from "./ui/theme";
 
 // Entry point: connects the form to the calculation and the page.
@@ -117,6 +118,7 @@ function initReset(button: HTMLButtonElement): void {
 // The driver boxes must exist before the saved names are put back into them.
 initDrivers(element("driverList"), element("addDriver"), update);
 restoreForm();
+initSetups(update);
 initTheme(element("theme"));
 initReset(element<HTMLButtonElement>("reset"));
 

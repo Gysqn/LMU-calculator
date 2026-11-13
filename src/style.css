@@ -156,6 +156,15 @@ fieldset legend + * { clear: both; }
 .note { font-size: .82rem; color: var(--mute); margin: 12px 0 0; }
 [hidden] { display: none !important; }
 
+/* Saved setups */
+.setups { display: flex; flex-direction: column; gap: 8px; padding-bottom: 16px; margin-bottom: 16px; border-bottom: 1px solid var(--line); }
+.setuprow { display: flex; gap: 6px; align-items: stretch; }
+.setuprow .in { flex: 1; min-width: 0; }
+.setuprow .in input { font-family: var(--body); }
+.setuprow button { min-height: 42px; }
+.setupmsg { color: var(--mute); font-size: .8rem; min-height: 1.2em; }
+button:disabled { opacity: .4; cursor: default; }
+
 /* Before / during the race switch */
 .mode { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; padding: 4px; margin-bottom: 16px; background: var(--field); border: 1px solid var(--line); border-radius: 8px; }
 .mode label { position: relative; cursor: pointer; }
