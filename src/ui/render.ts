@@ -1,5 +1,6 @@
 import { formatHm, formatHms, formatMs } from "../calc/time";
 import type { LiveState, Plan, Stint } from "../calc/types";
+import type { StopSaving } from "../calc/whatif";
 
 // Turns a plan into HTML. Everything the user typed goes through esc() first.
 
@@ -169,6 +170,17 @@ function renderLiveBar(r: Plan, live: LiveState | null): string {
     (live.boxThisLap && first && first.stop ? ' · boxing at the end of this lap' : "") + "</span></div>";
 }
 
-export function renderPlan(r: Plan, live: LiveState | null = null): string {
-  return renderLiveBar(r, live) + renderWarnings(r) + renderTiles(r, live) + renderTimeline(r) + renderDrivers(r, live) + renderTable(r, live);
+/** A tip: how much fuel to save per lap to need one pit stop less. */
+function renderSaving(saving: StopSaving | null): string {
+  if (!saving) return "";
+  const stops = (n: number): string => n + (n === 1 ? " stop" : " stops");
+  return '<div class="panel tip"><h3>Save a pit stop</h3><p>Use <strong>' + saving.fuelPerLap.toFixed(2) + " L per lap</strong> or less and you need " +
+    stops(saving.stopsThen) + " instead of " + saving.stopsNow + ". That is " + saving.savingPerLap.toFixed(2) + " L per lap less than now (" +
+    (saving.savingShare * 100).toFixed(0) + "%), and it saves about " + saving.pitSecondsSaved.toFixed(0) + " s in the pits.</p>" +
+    '<p class="note">Saving fuel makes your laps slower. That lost time is not counted here, so weigh it against the time you win.</p></div>';
+}
+
+export function renderPlan(r: Plan, live: LiveState | null = null, saving: StopSaving | null = null): string {
+  return renderLiveBar(r, live) + renderWarnings(r) + renderTiles(r, live) + renderTimeline(r) + renderSaving(saving) +
+    renderDrivers(r, live) + renderTable(r, live);
 }

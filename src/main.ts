@@ -1,6 +1,7 @@
 import "./style.css";
 import { planRace, replanRace } from "./calc/plan";
 import type { Plan } from "./calc/types";
+import { fuelToSaveAStop } from "./calc/whatif";
 import { initDrivers } from "./ui/drivers";
 import { prefillLive, raceLengthMinutes, readForm, resetForm, restoreForm, saveForm, setRaceLength, showErrors, syncVisibility } from "./ui/form";
 import { planText } from "./ui/planText";
@@ -45,7 +46,7 @@ function update(): void {
   }
   lastPlan = result;
   lastText = planText(read.input, result, read.live);
-  out.innerHTML = renderPlan(result, read.live);
+  out.innerHTML = renderPlan(result, read.live, fuelToSaveAStop(read.input, read.live));
   const stops = result.stops + (result.stops === 1 ? " stop" : " stops");
   jump.textContent = read.live ? stops + " to go · view plan ↓" : result.totalLaps + " laps · " + stops + " · view plan ↓";
 }

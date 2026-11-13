@@ -1,6 +1,7 @@
 // The driver list: one box per driver, with buttons to add, remove and move up.
 
-export const DEFAULT_DRIVERS = ["Alex", "Sam", "Kim"];
+// Three empty boxes. An empty box shows "Driver 1" and so on, and the plan uses that name.
+export const DEFAULT_DRIVERS = ["", "", ""];
 
 let list: HTMLElement | null = null;
 let changed: () => void = () => {};
